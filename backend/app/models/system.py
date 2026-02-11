@@ -46,8 +46,9 @@ class ScheduledReport(UUIDPrimaryKeyMixin, Base):
 
     report_name: Mapped[str] = mapped_column(String(200), nullable=False)
     report_type: Mapped[ReportType] = mapped_column(nullable=False)
-    schedule: Mapped[str] = mapped_column(String(50), nullable=False)
+    schedule_cron: Mapped[str] = mapped_column(String(50), nullable=False)
     recipients: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    filters: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     last_generated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

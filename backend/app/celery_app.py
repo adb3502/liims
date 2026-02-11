@@ -31,6 +31,10 @@ celery.conf.update(
             "task": "app.tasks.backup.check_backup_health",
             "schedule": 3600,  # hourly
         },
+        "process-scheduled-reports": {
+            "task": "app.tasks.reports.process_scheduled_reports",
+            "schedule": 900,  # every 15 minutes
+        },
     },
 )
 

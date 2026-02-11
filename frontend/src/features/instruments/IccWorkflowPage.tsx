@@ -210,7 +210,7 @@ export function IccWorkflowPage() {
       const matchesSearch =
         !searchQuery ||
         (slide.sample_code ?? '').toLowerCase().includes(lowerSearch) ||
-        (slide.stain_panel ?? '').toLowerCase().includes(lowerSearch) ||
+        (slide.antibody_panel ?? '').toLowerCase().includes(lowerSearch) ||
         slide.id.toLowerCase().includes(lowerSearch)
       const matchesStatus = !statusFilter || slide.status === statusFilter
       if (matchesSearch && matchesStatus && map[slide.status]) {
@@ -495,9 +495,9 @@ function SlideCard({
           <p className="font-mono text-sm font-bold text-foreground truncate">
             {slide.sample_code ?? slide.sample_id.slice(0, 8)}
           </p>
-          {slide.stain_panel && (
+          {slide.antibody_panel && (
             <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-              {slide.stain_panel}
+              {slide.antibody_panel}
             </p>
           )}
         </div>
@@ -523,10 +523,10 @@ function SlideCard({
 
       {/* Meta row */}
       <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-        {slide.slide_label && (
+        {slide.fixation_reagent && (
           <span className="flex items-center gap-0.5 truncate">
             <Layers className="h-2.5 w-2.5" />
-            {slide.slide_label}
+            {slide.fixation_reagent}
           </span>
         )}
         <span className="flex items-center gap-0.5">
@@ -559,8 +559,9 @@ function CreateIccDialog({
   const createMutation = useCreateIccSlide()
   const [form, setForm] = useState<IccSlideCreate>({
     sample_id: '',
-    slide_label: '',
-    stain_panel: '',
+    fixation_reagent: '',
+    antibody_panel: '',
+    secondary_antibody: '',
     notes: '',
   })
 
@@ -570,7 +571,7 @@ function CreateIccDialog({
     createMutation.mutate(form, {
       onSuccess: () => {
         onOpenChange(false)
-        setForm({ sample_id: '', slide_label: '', stain_panel: '', notes: '' })
+        setForm({ sample_id: '', fixation_reagent: '', antibody_panel: '', secondary_antibody: '', notes: '' })
       },
     })
   }
@@ -607,23 +608,34 @@ function CreateIccDialog({
           </div>
 
           <div>
-            <Label htmlFor="slide_label">Slide Label</Label>
+            <Label htmlFor="fixation_reagent">Fixation Reagent</Label>
             <Input
-              id="slide_label"
-              value={form.slide_label ?? ''}
-              onChange={(e) => updateField('slide_label', e.target.value)}
-              placeholder="e.g. SLD-001-A"
-              className="mt-1 font-mono"
+              id="fixation_reagent"
+              value={form.fixation_reagent ?? ''}
+              onChange={(e) => updateField('fixation_reagent', e.target.value)}
+              placeholder="e.g. 4% PFA"
+              className="mt-1"
             />
           </div>
 
           <div>
-            <Label htmlFor="stain_panel">Stain Panel</Label>
+            <Label htmlFor="antibody_panel">Antibody Panel</Label>
             <Input
-              id="stain_panel"
-              value={form.stain_panel ?? ''}
-              onChange={(e) => updateField('stain_panel', e.target.value)}
+              id="antibody_panel"
+              value={form.antibody_panel ?? ''}
+              onChange={(e) => updateField('antibody_panel', e.target.value)}
               placeholder="e.g. CD45/CD3/DAPI"
+              className="mt-1"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="secondary_antibody">Secondary Antibody</Label>
+            <Input
+              id="secondary_antibody"
+              value={form.secondary_antibody ?? ''}
+              onChange={(e) => updateField('secondary_antibody', e.target.value)}
+              placeholder="e.g. Goat anti-mouse IgG Alexa 488"
               className="mt-1"
             />
           </div>
@@ -674,13 +686,13 @@ function IccDetailDrawer({
   const advanceMutation = useAdvanceIccStatus(slideId)
 
   const [editNotes, setEditNotes] = useState<string | null>(null)
-  const [editCellCounts, setEditCellCounts] = useState<string | null>(null)
+  const [editAnalysisResults, setEditAnalysisResults] = useState<string | null>(null)
 
   // When slide data loads, sync edit state
   const notes = editNotes ?? slide?.notes ?? ''
-  const cellCountsStr =
-    editCellCounts ??
-    (slide?.cell_counts ? JSON.stringify(slide.cell_counts, null, 2) : '')
+  const analysisResultsStr =
+    editAnalysisResults ??
+    (slide?.analysis_results ? JSON.stringify(slide.analysis_results, null, 2) : '')
 
   const isTerminal = slide?.status === 'analysis_complete'
   const currentStageIndex = slide
@@ -692,11 +704,11 @@ function IccDetailDrawer({
       : null
 
   const handleSave = () => {
-    const updates: { notes?: string; cell_counts?: Record<string, number> } = {}
+    const updates: { notes?: string; analysis_results?: Record<string, unknown> } = {}
     if (editNotes !== null) updates.notes = editNotes
-    if (editCellCounts !== null) {
+    if (editAnalysisResults !== null) {
       try {
-        updates.cell_counts = JSON.parse(editCellCounts)
+        updates.analysis_results = JSON.parse(editAnalysisResults)
       } catch {
         // ignore invalid JSON
       }
@@ -704,7 +716,7 @@ function IccDetailDrawer({
     updateMutation.mutate(updates, {
       onSuccess: () => {
         setEditNotes(null)
-        setEditCellCounts(null)
+        setEditAnalysisResults(null)
       },
     })
   }
@@ -835,19 +847,27 @@ function IccDetailDrawer({
               <DetailSection title="Identifiers" icon={<SlidersHorizontal className="h-3.5 w-3.5" />}>
                 <DetailRow label="Slide ID" value={slide.id} mono />
                 <DetailRow label="Sample ID" value={slide.sample_id} mono />
-                <DetailRow
-                  label="Slide Label"
-                  value={slide.slide_label ?? '---'}
-                />
               </DetailSection>
 
               <DetailSection title="Staining" icon={<TestTubes className="h-3.5 w-3.5" />}>
                 <DetailRow
-                  label="Stain Panel"
-                  value={slide.stain_panel ?? '---'}
+                  label="Antibody Panel"
+                  value={slide.antibody_panel ?? '---'}
                 />
                 <DetailRow
-                  label="Fixation"
+                  label="Secondary Antibody"
+                  value={slide.secondary_antibody ?? '---'}
+                />
+                <DetailRow
+                  label="Fixation Reagent"
+                  value={slide.fixation_reagent ?? '---'}
+                />
+                <DetailRow
+                  label="Fixation Duration"
+                  value={slide.fixation_duration_min != null ? `${slide.fixation_duration_min} min` : '---'}
+                />
+                <DetailRow
+                  label="Fixation Date"
                   value={
                     slide.fixation_datetime
                       ? formatDate(slide.fixation_datetime)
@@ -855,12 +875,8 @@ function IccDetailDrawer({
                   }
                 />
                 <DetailRow
-                  label="Imaging"
-                  value={
-                    slide.imaging_datetime
-                      ? formatDate(slide.imaging_datetime)
-                      : '---'
-                  }
+                  label="Analysis Software"
+                  value={slide.analysis_software ?? '---'}
                 />
               </DetailSection>
 
@@ -873,18 +889,18 @@ function IccDetailDrawer({
               </DetailSection>
 
               <DetailSection title="Results" icon={<FileText className="h-3.5 w-3.5" />}>
-                {slide.image_paths && slide.image_paths.length > 0 ? (
+                {slide.image_file_paths && Object.keys(slide.image_file_paths).length > 0 ? (
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">
-                      Image Paths ({slide.image_paths.length})
+                      Image File Paths ({Object.keys(slide.image_file_paths).length})
                     </p>
                     <div className="space-y-1">
-                      {slide.image_paths.map((p, i) => (
+                      {Object.entries(slide.image_file_paths).map(([key, val]) => (
                         <p
-                          key={i}
+                          key={key}
                           className="text-xs font-mono text-foreground bg-muted px-2 py-1 rounded truncate"
                         >
-                          {p}
+                          {key}: {String(val)}
                         </p>
                       ))}
                     </div>
@@ -895,14 +911,14 @@ function IccDetailDrawer({
                   </p>
                 )}
 
-                {/* Cell Counts (editable) */}
+                {/* Analysis Results (editable) */}
                 <div className="mt-3">
                   <Label className="text-xs">
-                    Cell Counts (JSON)
+                    Analysis Results (JSON)
                   </Label>
                   <textarea
-                    value={cellCountsStr}
-                    onChange={(e) => setEditCellCounts(e.target.value)}
+                    value={analysisResultsStr}
+                    onChange={(e) => setEditAnalysisResults(e.target.value)}
                     rows={4}
                     placeholder='{ "CD45+": 120, "CD3+": 85 }'
                     className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -935,7 +951,7 @@ function IccDetailDrawer({
             </div>
 
             {/* Save button */}
-            {(editNotes !== null || editCellCounts !== null) && (
+            {(editNotes !== null || editAnalysisResults !== null) && (
               <div className="sticky bottom-0 bg-background border-t border-border -mx-6 px-6 py-3">
                 <Button
                   onClick={handleSave}

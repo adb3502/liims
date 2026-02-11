@@ -8,7 +8,6 @@ import {
 } from '@/api/instruments'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { PageSpinner } from '@/components/ui/spinner'
@@ -394,15 +393,10 @@ function CompleteRunDialog({
   runId: string
 }) {
   const completeMutation = useCompleteRun(runId)
-  const [qcStatus, setQcStatus] = useState<QCStatus | ''>('')
-  const [notes, setNotes] = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    await completeMutation.mutateAsync({
-      qc_status: qcStatus || undefined,
-      notes: notes.trim() || undefined,
-    })
+    await completeMutation.mutateAsync({ failed: false })
     onClose()
   }
 
@@ -414,28 +408,9 @@ function CompleteRunDialog({
           <DialogDescription>Mark this run as successfully completed.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="qc-status">QC Status</Label>
-            <select
-              id="qc-status"
-              value={qcStatus}
-              onChange={(e) => setQcStatus(e.target.value as QCStatus | '')}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              <option value="">Not assessed</option>
-              <option value="passed">Passed</option>
-              <option value="failed">Failed</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="complete-notes">Notes</Label>
-            <Input
-              id="complete-notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Optional completion notes..."
-            />
-          </div>
+          <p className="text-sm text-muted-foreground">
+            This will mark the run as completed. You can update QC status and notes separately after completion.
+          </p>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             <Button
@@ -464,14 +439,10 @@ function FailRunDialog({
   runId: string
 }) {
   const completeMutation = useCompleteRun(runId)
-  const [notes, setNotes] = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    await completeMutation.mutateAsync({
-      qc_status: 'failed',
-      notes: notes.trim() || 'Run marked as failed',
-    })
+    await completeMutation.mutateAsync({ failed: true })
     onClose()
   }
 
@@ -486,22 +457,15 @@ function FailRunDialog({
           <DialogDescription>This action cannot be undone.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="fail-notes">Reason</Label>
-            <Input
-              id="fail-notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Describe why the run failed..."
-              required
-            />
-          </div>
+          <p className="text-sm text-muted-foreground">
+            This will mark the run as failed. Are you sure you want to proceed?
+          </p>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             <Button
               type="submit"
               variant="destructive"
-              disabled={completeMutation.isPending || !notes.trim()}
+              disabled={completeMutation.isPending}
             >
               {completeMutation.isPending ? 'Saving...' : 'Mark Failed'}
             </Button>
@@ -526,6 +490,7 @@ function UploadResultsDialog({
   const uploadMutation = useUploadRunResults(runId)
   const [fileContent, setFileContent] = useState('')
   const [fileName, setFileName] = useState('')
+  const [resultType, setResultType] = useState<'proteomics' | 'metabolomics'>('proteomics')
   const [dragOver, setDragOver] = useState(false)
   const [parseError, setParseError] = useState('')
 
@@ -563,7 +528,18 @@ function UploadResultsDialog({
         setParseError('Expected a JSON array of results or an object with a "results" key.')
         return
       }
-      await uploadMutation.mutateAsync({ results })
+      // Validate that results have required fields
+      for (const item of results) {
+        if (!item.sample_id || !item.feature_id) {
+          setParseError('Each result must have "sample_id" and "feature_id" fields.')
+          return
+        }
+      }
+      await uploadMutation.mutateAsync({
+        result_type: resultType,
+        source_file_path: fileName || undefined,
+        results,
+      })
       onClose()
     } catch {
       setParseError('Invalid JSON. Please check the file format.')
@@ -576,11 +552,25 @@ function UploadResultsDialog({
         <DialogHeader>
           <DialogTitle>Upload Run Results</DialogTitle>
           <DialogDescription>
-            Upload a JSON file with sample results. Expected format: an array of
-            {' { sample_id, data } '} objects.
+            Upload a JSON file with omics results. Each result item must include
+            {' { sample_id, feature_id, quantification_value } '}.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+          {/* Result type */}
+          <div className="space-y-1.5">
+            <Label htmlFor="result-type">Result Type</Label>
+            <select
+              id="result-type"
+              value={resultType}
+              onChange={(e) => setResultType(e.target.value as 'proteomics' | 'metabolomics')}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="proteomics">Proteomics</option>
+              <option value="metabolomics">Metabolomics</option>
+            </select>
+          </div>
+
           {/* Drop zone */}
           <div
             onDragOver={(e) => {

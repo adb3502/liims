@@ -28,6 +28,11 @@ import { PlateDesignerPage } from '@/features/instruments/PlateDesignerPage'
 import { PlateDetailPage } from '@/features/instruments/PlateDetailPage'
 import { IccWorkflowPage } from '@/features/instruments/IccWorkflowPage'
 import { OmicsResultsPage } from '@/features/instruments/OmicsResultsPage'
+import { EnrollmentDashboardPage } from '@/features/reports/EnrollmentDashboardPage'
+import { InventoryDashboardPage } from '@/features/reports/InventoryDashboardPage'
+import { QualityDashboardPage } from '@/features/reports/QualityDashboardPage'
+import { QueryBuilderPage } from '@/features/reports/QueryBuilderPage'
+import { ReportGeneratorPage } from '@/features/reports/ReportGeneratorPage'
 import { PageSpinner } from '@/components/ui/spinner'
 import type { UserRole } from '@/types'
 
@@ -224,15 +229,12 @@ export const routes: RouteObject[] = [
       {
         path: 'reports',
         children: [
-          { path: 'enrollment', element: <PlaceholderPage title="Enrollment Dashboard" /> },
-          { path: 'inventory', element: <PlaceholderPage title="Inventory Dashboard" /> },
+          { path: 'enrollment', element: <EnrollmentDashboardPage /> },
+          { path: 'inventory', element: <InventoryDashboardPage /> },
           { path: 'sites', element: <PlaceholderPage title="Sites Dashboard" /> },
-          {
-            path: 'data-availability',
-            element: <PlaceholderPage title="Data Availability" />,
-          },
-          { path: 'quality', element: <PlaceholderPage title="Quality Dashboard" /> },
-          { path: 'query-builder', element: <PlaceholderPage title="Query Builder" /> },
+          { path: 'data-availability', element: <ReportGeneratorPage /> },
+          { path: 'quality', element: <QualityDashboardPage /> },
+          { path: 'query-builder', element: <QueryBuilderPage /> },
         ],
       },
 

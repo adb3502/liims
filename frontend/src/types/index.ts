@@ -914,15 +914,18 @@ export interface RunDetail extends InstrumentRun {
 export interface IccSlide {
   id: string
   sample_id: string
-  slide_label: string | null
   status: IccStatus
-  stain_panel: string | null
+  fixation_reagent: string | null
+  fixation_duration_min: number | null
   fixation_datetime: string | null
-  imaging_datetime: string | null
+  antibody_panel: string | null
+  secondary_antibody: string | null
+  microscope_settings: Record<string, unknown> | null
+  image_file_paths: Record<string, unknown> | null
+  analysis_software: string | null
+  analysis_results: Record<string, unknown> | null
   operator_id: string | null
   notes: string | null
-  image_paths: string[] | null
-  cell_counts: Record<string, number> | null
   created_at: string
   updated_at: string
   sample_code?: string
@@ -930,7 +933,8 @@ export interface IccSlide {
 
 export interface IccSlideCreate {
   sample_id: string
-  slide_label?: string
-  stain_panel?: string
+  fixation_reagent?: string
+  antibody_panel?: string
+  secondary_antibody?: string
   notes?: string
 }

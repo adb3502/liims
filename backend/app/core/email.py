@@ -3,6 +3,7 @@
 import html
 import logging
 import smtplib
+from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -16,21 +17,36 @@ def send_email(
     subject: str,
     body_html: str,
     body_text: str | None = None,
+    attachments: list[tuple[str, bytes]] | None = None,
 ) -> bool:
-    """Send an email via SMTP. Returns True on success, False on failure."""
+    """Send an email via SMTP. Returns True on success, False on failure.
+
+    Args:
+        attachments: Optional list of (filename, data_bytes) tuples to attach.
+    """
     if not settings.SMTP_HOST or not settings.SMTP_USER:
         logger.warning("SMTP not configured. Skipping email.")
         return False
 
     try:
-        msg = MIMEMultipart("alternative")
+        msg = MIMEMultipart("mixed")
         msg["Subject"] = subject
         msg["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_USER}>"
         msg["To"] = ", ".join(to_addresses)
 
+        # Body part (alternative for text/html)
+        body_part = MIMEMultipart("alternative")
         if body_text:
-            msg.attach(MIMEText(body_text, "plain"))
-        msg.attach(MIMEText(body_html, "html"))
+            body_part.attach(MIMEText(body_text, "plain"))
+        body_part.attach(MIMEText(body_html, "html"))
+        msg.attach(body_part)
+
+        # Attachments
+        if attachments:
+            for filename, data in attachments:
+                part = MIMEApplication(data, Name=filename)
+                part["Content-Disposition"] = f'attachment; filename="{filename}"'
+                msg.attach(part)
 
         if settings.SMTP_USE_TLS:
             server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT)

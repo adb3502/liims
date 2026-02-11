@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="section">
+  <h2>Consent Coverage</h2>
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="value">{{ total_participants }}</div>
+      <div class="label">Total Participants</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{{ consent_coverage_pct }}%</div>
+      <div class="label">Consent Coverage</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{{ withdrawn_count }}</div>
+      <div class="label">Withdrawals</div>
+    </div>
+  </div>
+
+  <h3>Consent by Type</h3>
+  <table>
+    <thead><tr><th>Consent Type</th><th>Given</th><th>Not Given</th><th>Withdrawn</th><th>Coverage %</th></tr></thead>
+    <tbody>
+    {% for row in consent_by_type %}
+      <tr>
+        <td>{{ row.consent_type }}</td>
+        <td>{{ row.given }}</td>
+        <td>{{ row.not_given }}</td>
+        <td>{{ row.withdrawn }}</td>
+        <td>{{ row.coverage_pct }}%</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if missing_consent_count > 0 %}
+  <div class="alert-box alert-warning">
+    {{ missing_consent_count }} participant(s) have incomplete consent records.
+  </div>
+  {% endif %}
+</div>
+
+<div class="section">
+  <h2>Audit Trail Summary</h2>
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="value">{{ total_audit_entries }}</div>
+      <div class="label">Audit Entries</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{{ audit_users_count }}</div>
+      <div class="label">Active Users</div>
+    </div>
+  </div>
+
+  <h3>Actions by Type (Last 30 Days)</h3>
+  <table>
+    <thead><tr><th>Action</th><th>Count</th></tr></thead>
+    <tbody>
+    {% for row in audit_by_action %}
+      <tr>
+        <td>{{ row.action }}</td>
+        <td>{{ row.count }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <h3>Top Entities Modified</h3>
+  <table>
+    <thead><tr><th>Entity Type</th><th>Modifications</th></tr></thead>
+    <tbody>
+    {% for row in audit_by_entity %}
+      <tr>
+        <td>{{ row.entity_type }}</td>
+        <td>{{ row.count }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="section">
+  <h2>DPDP Compliance Checklist</h2>
+  <table>
+    <thead><tr><th>Requirement</th><th>Status</th><th>Details</th></tr></thead>
+    <tbody>
+    {% for item in dpdp_checklist %}
+      <tr>
+        <td>{{ item.requirement }}</td>
+        <td style="color: {{ '#059669' if item.met else '#dc2626' }}; font-weight: 600;">
+          {{ "PASS" if item.met else "FAIL" }}
+        </td>
+        <td>{{ item.details }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="section">
+  <h2>Data Retention</h2>
+  <table>
+    <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td>Samples pending discard</td><td>{{ pending_discard_count }}</td></tr>
+      <tr><td>Discarded samples</td><td>{{ discarded_count }}</td></tr>
+      <tr><td>Consent withdrawals requiring data deletion</td><td>{{ deletion_required_count }}</td></tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}

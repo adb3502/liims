@@ -86,8 +86,9 @@ export function InstrumentRunsPage() {
       instrument_id: instrumentFilter || undefined,
       run_type: (typeFilter || undefined) as RunType | undefined,
       status: (statusFilter || undefined) as RunStatus | undefined,
+      search: debouncedSearch || undefined,
     }),
-    [page, instrumentFilter, typeFilter, statusFilter]
+    [page, instrumentFilter, typeFilter, statusFilter, debouncedSearch]
   )
 
   const { data, isLoading, isError } = useRuns(queryParams)
@@ -112,18 +113,7 @@ export function InstrumentRunsPage() {
   const canCreate = hasRole('super_admin', 'lab_manager', 'lab_technician')
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
-  // Client-side name search
-  const runs = useMemo(() => {
-    const items = data?.data ?? []
-    if (!debouncedSearch.trim()) return items
-    const q = debouncedSearch.toLowerCase()
-    return items.filter(
-      (r) =>
-        r.run_name?.toLowerCase().includes(q) ||
-        r.instrument_name?.toLowerCase().includes(q) ||
-        r.batch_id?.toLowerCase().includes(q)
-    )
-  }, [data?.data, debouncedSearch])
+  const runs = data?.data ?? []
 
   // Instrument lookup
   const instrumentMap = useMemo(() => {

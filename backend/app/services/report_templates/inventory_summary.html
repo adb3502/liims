@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="section">
+  <h2>Overview</h2>
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="value">{{ total_samples }}</div>
+      <div class="label">Total Samples</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{{ total_stored }}</div>
+      <div class="label">In Storage</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{{ storage_utilization_pct }}%</div>
+      <div class="label">Storage Utilization</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{{ total_positions }}</div>
+      <div class="label">Total Positions</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Samples by Type</h2>
+  <div class="bar-chart">
+    {% for row in by_type %}
+    <div class="bar-row">
+      <div class="bar-label">{{ row.sample_type }}</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width: {{ row.pct }}%;"></div>
+      </div>
+      <div class="bar-value">{{ row.count }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="section">
+  <h2>Samples by Status</h2>
+  <table>
+    <thead><tr><th>Status</th><th>Count</th><th>%</th></tr></thead>
+    <tbody>
+    {% for row in by_status %}
+      <tr>
+        <td>{{ row.status }}</td>
+        <td>{{ row.count }}</td>
+        <td>{{ row.pct }}%</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="section">
+  <h2>Freezer Storage Utilization</h2>
+  {% for f in freezer_utilization %}
+  <div style="margin-bottom: 8px;">
+    <div class="bar-row">
+      <div class="bar-label">{{ f.freezer_name }} ({{ f.freezer_type }})</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width: {{ f.utilization_pct }}%; background: {{ '#dc2626' if f.utilization_pct >= 90 else '#f59e0b' if f.utilization_pct >= 75 else '#3b82f6' }};"></div>
+      </div>
+      <div class="bar-value">{{ f.utilization_pct }}%</div>
+    </div>
+  </div>
+  {% endfor %}
+  {% for f in freezer_utilization %}
+    {% if f.utilization_pct >= 90 %}
+    <div class="alert-box alert-warning">
+      Warning: {{ f.freezer_name }} is at {{ f.utilization_pct }}% capacity ({{ f.occupied }}/{{ f.total_positions }} positions).
+    </div>
+    {% endif %}
+  {% endfor %}
+</div>
+
+<div class="section">
+  <h2>Low-Volume Warnings</h2>
+  {% if low_volume_samples %}
+  <table>
+    <thead><tr><th>Sample Code</th><th>Type</th><th>Remaining (uL)</th><th>Initial (uL)</th></tr></thead>
+    <tbody>
+    {% for s in low_volume_samples %}
+      <tr>
+        <td>{{ s.sample_code }}</td>
+        <td>{{ s.sample_type }}</td>
+        <td style="color: #dc2626; font-weight: 600;">{{ s.remaining_volume_ul }}</td>
+        <td>{{ s.initial_volume_ul }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="alert-box alert-success">No low-volume samples detected.</div>
+  {% endif %}
+</div>
+{% endblock %}

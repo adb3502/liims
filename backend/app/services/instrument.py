@@ -8,7 +8,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import AuditAction, OmicsResultType, QCStatus, RunStatus
@@ -180,7 +180,7 @@ class PlateService:
         sort: str = "created_at",
         order: str = "desc",
     ) -> tuple[list[Plate], int]:
-        query = select(Plate)
+        query = select(Plate).where(Plate.is_deleted == False)  # noqa: E712
 
         if run_id:
             query = query.where(Plate.run_id == run_id)
@@ -201,7 +201,10 @@ class PlateService:
 
     async def get_plate(self, plate_id: uuid.UUID) -> Plate | None:
         result = await self.db.execute(
-            select(Plate).where(Plate.id == plate_id)
+            select(Plate).where(
+                Plate.id == plate_id,
+                Plate.is_deleted == False,  # noqa: E712
+            )
         )
         return result.scalar_one_or_none()
 
@@ -292,6 +295,25 @@ class PlateService:
             raise ValueError("Plate not found.")
         if plate.run_id is None:
             raise ValueError("Plate must be associated with a run before assigning wells.")
+
+        # Check for duplicate well positions in the request
+        requested_positions = [a.well_position for a in assignments]
+        if len(requested_positions) != len(set(requested_positions)):
+            raise ValueError("Duplicate well positions in assignment request.")
+
+        # Check for already-occupied well positions on this plate
+        existing_result = await self.db.execute(
+            select(InstrumentRunSample.well_position)
+            .where(
+                InstrumentRunSample.plate_id == plate_id,
+                InstrumentRunSample.well_position.in_(requested_positions),
+            )
+        )
+        occupied = {row[0] for row in existing_result.all()}
+        if occupied:
+            raise ValueError(
+                f"Well position(s) already occupied: {', '.join(sorted(occupied))}"
+            )
 
         created = []
         for idx, assignment in enumerate(assignments):
@@ -700,10 +722,36 @@ class RunService:
         sort: str = "created_at",
         order: str = "desc",
     ) -> tuple[list[dict], int]:
-        query = select(InstrumentRun).where(
+        # Base filter for counting
+        base_filter = select(InstrumentRun).where(
             InstrumentRun.is_deleted == False  # noqa: E712
         )
+        if instrument_id:
+            base_filter = base_filter.where(InstrumentRun.instrument_id == instrument_id)
+        if status:
+            base_filter = base_filter.where(InstrumentRun.status == status)
+        if run_type:
+            base_filter = base_filter.where(InstrumentRun.run_type == run_type)
+        if search:
+            safe = _escape_ilike(search)
+            base_filter = base_filter.where(InstrumentRun.run_name.ilike(f"%{safe}%"))
 
+        count_q = select(func.count()).select_from(base_filter.subquery())
+        total = (await self.db.execute(count_q)).scalar_one()
+
+        # Aggregated query: JOIN instrument name + COUNT plates and samples
+        query = (
+            select(
+                InstrumentRun,
+                Instrument.name.label("instrument_name"),
+                func.count(distinct(Plate.id)).label("plate_count"),
+                func.count(distinct(InstrumentRunSample.id)).label("sample_count"),
+            )
+            .outerjoin(Instrument, InstrumentRun.instrument_id == Instrument.id)
+            .outerjoin(Plate, Plate.run_id == InstrumentRun.id)
+            .outerjoin(InstrumentRunSample, InstrumentRunSample.run_id == InstrumentRun.id)
+            .where(InstrumentRun.is_deleted == False)  # noqa: E712
+        )
         if instrument_id:
             query = query.where(InstrumentRun.instrument_id == instrument_id)
         if status:
@@ -714,8 +762,7 @@ class RunService:
             safe = _escape_ilike(search)
             query = query.where(InstrumentRun.run_name.ilike(f"%{safe}%"))
 
-        count_q = select(func.count()).select_from(query.subquery())
-        total = (await self.db.execute(count_q)).scalar_one()
+        query = query.group_by(InstrumentRun.id, Instrument.name)
 
         sort_col = sort if sort in RUN_ALLOWED_SORTS else "created_at"
         col = getattr(InstrumentRun, sort_col)
@@ -723,11 +770,31 @@ class RunService:
         query = query.offset((page - 1) * per_page).limit(per_page)
 
         result = await self.db.execute(query)
-        runs = list(result.scalars().all())
-
         items = []
-        for run in runs:
-            items.append(await self._run_dict(run))
+        for run, instrument_name, plate_count, sample_count in result.all():
+            items.append({
+                "id": run.id,
+                "instrument_id": run.instrument_id,
+                "run_name": run.run_name,
+                "run_type": run.run_type,
+                "status": run.status,
+                "started_at": run.started_at,
+                "completed_at": run.completed_at,
+                "operator_id": run.operator_id,
+                "method_name": run.method_name,
+                "batch_id": run.batch_id,
+                "notes": run.notes,
+                "raw_data_path": run.raw_data_path,
+                "raw_data_size_bytes": run.raw_data_size_bytes,
+                "raw_data_verified": run.raw_data_verified,
+                "qc_status": run.qc_status,
+                "created_by": run.created_by,
+                "created_at": run.created_at,
+                "updated_at": run.updated_at,
+                "instrument_name": instrument_name,
+                "plate_count": plate_count,
+                "sample_count": sample_count,
+            })
         return items, total
 
     async def get_run(self, run_id: uuid.UUID) -> dict | None:

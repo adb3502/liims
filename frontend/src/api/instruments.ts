@@ -60,7 +60,7 @@ export const iccKeys = {
 
 // --- Instrument Queries ---
 
-export function useInstruments(params: { is_active?: boolean; instrument_type?: string; page?: number; per_page?: number } = {}) {
+export function useInstruments(params: { is_active?: boolean; instrument_type?: string; search?: string; page?: number; per_page?: number } = {}) {
   return useQuery({
     queryKey: instrumentKeys.list(params),
     queryFn: async () => {
@@ -182,6 +182,7 @@ export function useRuns(params: {
   instrument_id?: string
   run_type?: RunType
   status?: RunStatus
+  search?: string
   page?: number
   per_page?: number
 } = {}) {
@@ -233,8 +234,12 @@ export function useStartRun(id: string) {
 export function useCompleteRun(id: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (data?: { qc_status?: string; notes?: string }) => {
-      const res = await api.post<SingleResponse<InstrumentRun>>(`/instruments/runs/${id}/complete`, data ?? {})
+    mutationFn: async (data?: { failed?: boolean }) => {
+      const res = await api.post<SingleResponse<InstrumentRun>>(
+        `/instruments/runs/${id}/complete`,
+        null,
+        { params: { failed: data?.failed ?? false } },
+      )
       return res.data.data
     },
     onSuccess: () => {
@@ -247,7 +252,21 @@ export function useCompleteRun(id: string) {
 export function useUploadRunResults(id: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (data: { results: Array<{ sample_id: string; data: Record<string, unknown> }> }) => {
+    mutationFn: async (data: {
+      result_type: OmicsResultType
+      analysis_software?: string
+      software_version?: string
+      source_file_path?: string
+      notes?: string
+      results: Array<{
+        sample_id: string
+        feature_id: string
+        feature_name?: string
+        quantification_value?: number
+        is_imputed?: boolean
+        confidence_score?: number
+      }>
+    }) => {
       const res = await api.post(`/instruments/runs/${id}/results`, data)
       return res.data.data
     },
@@ -294,7 +313,7 @@ export function useCreateIccSlide() {
 export function useUpdateIccSlide(id: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (data: { status?: IccStatus; notes?: string; cell_counts?: Record<string, number> }) => {
+    mutationFn: async (data: { status?: IccStatus; notes?: string; analysis_results?: Record<string, unknown>; fixation_reagent?: string; antibody_panel?: string; secondary_antibody?: string; microscope_settings?: Record<string, unknown>; image_file_paths?: Record<string, unknown>; analysis_software?: string }) => {
       const res = await api.put<SingleResponse<IccSlide>>(`/icc/${id}`, data)
       return res.data.data
     },

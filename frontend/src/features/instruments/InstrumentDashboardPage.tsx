@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useInstruments, useCreateInstrument } from '@/api/instruments'
 import { useAuth } from '@/hooks/useAuth'
@@ -151,10 +151,20 @@ function InstrumentCard({ instrument, onClick }: { instrument: Instrument; onCli
   )
 }
 
+function useDebounce(value: string, delay: number): string {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(timer)
+  }, [value, delay])
+  return debounced
+}
+
 export function InstrumentDashboardPage() {
   const navigate = useNavigate()
   const { hasRole } = useAuth()
   const [searchInput, setSearchInput] = useState('')
+  const debouncedSearch = useDebounce(searchInput, 300)
   const [typeFilter, setTypeFilter] = useState<InstrumentType | ''>('')
   const [activeFilter, setActiveFilter] = useState<'' | 'true' | 'false'>('')
   const [page, setPage] = useState(1)
@@ -165,7 +175,8 @@ export function InstrumentDashboardPage() {
     per_page: PER_PAGE,
     instrument_type: typeFilter || undefined,
     is_active: activeFilter === '' ? undefined : activeFilter === 'true',
-  }), [page, typeFilter, activeFilter])
+    search: debouncedSearch || undefined,
+  }), [page, typeFilter, activeFilter, debouncedSearch])
 
   const { data, isLoading, isError } = useInstruments(queryParams)
 
@@ -175,18 +186,7 @@ export function InstrumentDashboardPage() {
 
   const canCreate = hasRole('super_admin', 'lab_manager')
 
-  // Client-side search filter on name
-  const instruments = useMemo(() => {
-    const items = data?.data ?? []
-    if (!searchInput.trim()) return items
-    const q = searchInput.toLowerCase()
-    return items.filter(
-      (i) =>
-        i.name.toLowerCase().includes(q) ||
-        i.manufacturer?.toLowerCase().includes(q) ||
-        i.model?.toLowerCase().includes(q)
-    )
-  }, [data?.data, searchInput])
+  const instruments = data?.data ?? []
 
   return (
     <div>

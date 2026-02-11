@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="section">
+  <h2>Overview</h2>
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="value">{{ qc_pass_rate_pct }}%</div>
+      <div class="label">QC Pass Rate</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{{ icc_completion_pct }}%</div>
+      <div class="label">ICC Completion</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{{ omics_coverage_pct }}%</div>
+      <div class="label">Omics Coverage</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{{ deviation_rate_pct }}%</div>
+      <div class="label">Deviation Rate</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Instrument Run QC Results</h2>
+  <table>
+    <thead><tr><th>QC Status</th><th>Runs</th><th>%</th></tr></thead>
+    <tbody>
+    {% for row in qc_by_status %}
+      <tr>
+        <td>{{ row.status }}</td>
+        <td>{{ row.count }}</td>
+        <td>{{ row.pct }}%</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if qc_failed_count > 0 %}
+  <div class="alert-box alert-warning">
+    {{ qc_failed_count }} run(s) failed QC review. Investigate before proceeding with downstream analysis.
+  </div>
+  {% endif %}
+</div>
+
+<div class="section">
+  <h2>Sample Deviations</h2>
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="value">{{ total_deviations }}</div>
+      <div class="label">Total Deviations</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{{ deviation_rate_pct }}%</div>
+      <div class="label">Deviation Rate</div>
+    </div>
+  </div>
+  {% if recent_deviations %}
+  <h3>Recent Deviations</h3>
+  <table>
+    <thead><tr><th>Sample Code</th><th>Type</th><th>Notes</th></tr></thead>
+    <tbody>
+    {% for d in recent_deviations %}
+      <tr>
+        <td>{{ d.sample_code }}</td>
+        <td>{{ d.sample_type }}</td>
+        <td>{{ d.deviation_notes }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+<div class="section">
+  <h2>ICC Processing Status</h2>
+  <table>
+    <thead><tr><th>Status</th><th>Count</th><th>%</th></tr></thead>
+    <tbody>
+    {% for row in icc_by_status %}
+      <tr>
+        <td>{{ row.status }}</td>
+        <td>{{ row.count }}</td>
+        <td>{{ row.pct }}%</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="section">
+  <h2>Omics Data Coverage</h2>
+  <table>
+    <thead><tr><th>Result Type</th><th>Result Sets</th><th>Unique Samples</th></tr></thead>
+    <tbody>
+    {% for row in omics_by_type %}
+      <tr>
+        <td>{{ row.result_type }}</td>
+        <td>{{ row.set_count }}</td>
+        <td>{{ row.sample_count }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <div style="margin-top: 8px; font-size: 9pt; color: #64748b;">
+    {{ omics_total_samples }} of {{ total_samples }} samples have omics results ({{ omics_coverage_pct }}% coverage).
+  </div>
+</div>
+{% endblock %}

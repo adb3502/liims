@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="section">
+  <h2>Overview</h2>
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="value">{{ total_participants }}</div>
+      <div class="label">Total Enrolled</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{{ total_sites }}</div>
+      <div class="label">Collection Sites</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{{ total_waves }}</div>
+      <div class="label">Waves</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{{ avg_completion_pct }}%</div>
+      <div class="label">Avg Completion</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Enrollment by Collection Site</h2>
+  <div class="bar-chart">
+    {% for site in by_site %}
+    <div class="bar-row">
+      <div class="bar-label">{{ site.site_name }}</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width: {{ site.pct }}%;"></div>
+      </div>
+      <div class="bar-value">{{ site.count }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="section">
+  <h2>Demographic Distribution</h2>
+  <div style="display: flex; gap: 24px;">
+    <div style="flex: 1;">
+      <h3>By Age Group</h3>
+      <table>
+        <thead><tr><th>Age Group</th><th>Count</th><th>%</th></tr></thead>
+        <tbody>
+        {% for row in by_age_group %}
+          <tr>
+            <td>{{ row.label }}</td>
+            <td>{{ row.count }}</td>
+            <td>{{ row.pct }}%</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div style="flex: 1;">
+      <h3>By Sex</h3>
+      <table>
+        <thead><tr><th>Sex</th><th>Count</th><th>%</th></tr></thead>
+        <tbody>
+        {% for row in by_sex %}
+          <tr>
+            <td>{{ row.label }}</td>
+            <td>{{ row.count }}</td>
+            <td>{{ row.pct }}%</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Enrollment by Wave</h2>
+  <table>
+    <thead><tr><th>Wave</th><th>Participants</th><th>% of Total</th></tr></thead>
+    <tbody>
+    {% for row in by_wave %}
+      <tr>
+        <td>Wave {{ row.wave }}</td>
+        <td>{{ row.count }}</td>
+        <td>{{ row.pct }}%</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="section">
+  <h2>Recent Enrollment (Last 30 Days)</h2>
+  <table>
+    <thead><tr><th>Date</th><th>Enrolled</th></tr></thead>
+    <tbody>
+    {% for row in enrollment_rate %}
+      <tr>
+        <td>{{ row.date }}</td>
+        <td>{{ row.count }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

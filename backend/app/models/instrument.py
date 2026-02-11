@@ -72,6 +72,7 @@ class Plate(UUIDPrimaryKeyMixin, Base):
     rows: Mapped[int] = mapped_column(Integer, default=8, server_default="8")
     columns: Mapped[int] = mapped_column(Integer, default=12, server_default="12")
     randomization_config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    is_deleted: Mapped[bool] = mapped_column(default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
