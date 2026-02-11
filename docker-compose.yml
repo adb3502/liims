@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - api
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    environment:
+      - VITE_API_URL=/api
+    restart: unless-stopped
+
+  api:
+    build: ./backend
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://liims:${POSTGRES_PASSWORD:-password}@postgres:5432/liims
+      - REDIS_URL=redis://redis:6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - ODK_CENTRAL_URL=${ODK_CENTRAL_URL:-}
+      - ODK_CENTRAL_EMAIL=${ODK_CENTRAL_EMAIL:-}
+      - ODK_CENTRAL_PASSWORD=${ODK_CENTRAL_PASSWORD:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-LIIMS Alerts}
+      - NAS_MOUNT_PATH=/data/nas
+    volumes:
+      - ${NAS_MOUNT_PATH:-./data/nas}:/data/nas:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  celery-worker:
+    build: ./backend
+    command: celery -A app.celery_app:celery worker -l info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://liims:${POSTGRES_PASSWORD:-password}@postgres:5432/liims
+      - REDIS_URL=redis://redis:6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - NAS_MOUNT_PATH=/data/nas
+    volumes:
+      - ${NAS_MOUNT_PATH:-./data/nas}:/data/nas:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  celery-beat:
+    build: ./backend
+    command: celery -A app.celery_app:celery beat -l info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://liims:${POSTGRES_PASSWORD:-password}@postgres:5432/liims
+      - REDIS_URL=redis://redis:6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=liims
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=liims
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U liims"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
