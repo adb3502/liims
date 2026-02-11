@@ -14,6 +14,13 @@ import { FreezerListPage } from '@/features/storage/FreezerListPage'
 import { FreezerDetailPage } from '@/features/storage/FreezerDetailPage'
 import { BoxDetailPage } from '@/features/storage/BoxDetailPage'
 import { StorageSearchPage } from '@/features/storage/StorageSearchPage'
+import { FieldEventListPage } from '@/features/field-ops/FieldEventListPage'
+import { FieldEventDetailPage } from '@/features/field-ops/FieldEventDetailPage'
+import { BulkDigitizePage } from '@/features/field-ops/BulkDigitizePage'
+import { ImportWizardPage } from '@/features/partners/ImportWizardPage'
+import { ImportHistoryPage } from '@/features/partners/ImportHistoryPage'
+import { StoolKitTrackerPage } from '@/features/partners/StoolKitTrackerPage'
+import { OdkSyncPage } from '@/features/partners/OdkSyncPage'
 import { PageSpinner } from '@/components/ui/spinner'
 import type { UserRole } from '@/types'
 
@@ -172,9 +179,9 @@ export const routes: RouteObject[] = [
           </RoleGuard>
         ),
         children: [
-          { path: 'events', element: <PlaceholderPage title="Field Events" /> },
-          { path: 'events/:id', element: <PlaceholderPage title="Event Detail" /> },
-          { path: 'digitization', element: <PlaceholderPage title="Digitization" /> },
+          { path: 'events', element: <FieldEventListPage /> },
+          { path: 'events/:id', element: <FieldEventDetailPage /> },
+          { path: 'events/:id/digitize', element: <BulkDigitizePage /> },
           { path: 'conflicts', element: <PlaceholderPage title="Sync Conflicts" /> },
         ],
       },
@@ -183,10 +190,11 @@ export const routes: RouteObject[] = [
       {
         path: 'partners',
         children: [
-          { path: 'import', element: <PlaceholderPage title="Import Partner Data" /> },
-          { path: 'history', element: <PlaceholderPage title="Import History" /> },
+          { path: 'import', element: <ImportWizardPage /> },
+          { path: 'history', element: <ImportHistoryPage /> },
           { path: 'results', element: <PlaceholderPage title="Partner Results" /> },
-          { path: 'stool-kits', element: <PlaceholderPage title="Stool Kit Tracker" /> },
+          { path: 'stool-kits', element: <StoolKitTrackerPage /> },
+          { path: 'odk-sync', element: <OdkSyncPage /> },
         ],
       },
 

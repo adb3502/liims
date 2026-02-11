@@ -108,8 +108,8 @@ export function BoxDetailPage() {
       Array.from({ length: box.columns }, () => null)
     )
     for (const pos of box.positions) {
-      if (pos.row >= 0 && pos.row < box.rows && pos.column >= 0 && pos.column < box.columns) {
-        g[pos.row][pos.column] = pos
+      if (pos.row >= 1 && pos.row <= box.rows && pos.column >= 1 && pos.column <= box.columns) {
+        g[pos.row - 1][pos.column - 1] = pos
       }
     }
     return g
@@ -381,7 +381,7 @@ function AssignSampleDialog({
   const assignMutation = useAssignSample(position.id)
   const [sampleId, setSampleId] = useState('')
 
-  const posLabel = `${String.fromCharCode(65 + position.column)}${position.row + 1}`
+  const posLabel = `${String.fromCharCode(65 + position.column - 1)}${position.row}`
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -440,7 +440,7 @@ function OccupiedCellDialog({
 }) {
   const navigate = useNavigate()
   const unassignMutation = useUnassignSample(position.id)
-  const posLabel = `${String.fromCharCode(65 + position.column)}${position.row + 1}`
+  const posLabel = `${String.fromCharCode(65 + position.column - 1)}${position.row}`
 
   async function handleUnassign() {
     await unassignMutation.mutateAsync()

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useStorageSearch, type StorageSearchResult } from '@/api/storage'
 import { Badge } from '@/components/ui/badge'
@@ -15,7 +15,7 @@ import {
 
 function useDebounce(value: string, delay: number): string {
   const [debounced, setDebounced] = useState(value)
-  useMemo(() => {
+  useEffect(() => {
     const timer = setTimeout(() => setDebounced(value), delay)
     return () => clearTimeout(timer)
   }, [value, delay])
@@ -107,7 +107,7 @@ export function StorageSearchPage() {
 
 function StorageResultCard({ result }: { result: StorageSearchResult }) {
   const navigate = useNavigate()
-  const posLabel = `${String.fromCharCode(65 + result.column)}${result.row + 1}`
+  const posLabel = `${String.fromCharCode(65 + result.column - 1)}${result.row}`
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden hover:border-primary/30 transition-colors">

@@ -77,7 +77,6 @@ const navigation: NavItem[] = [
     ],
     children: [
       { label: 'Events', path: '/field-ops/events' },
-      { label: 'Digitization', path: '/field-ops/digitization' },
       { label: 'Conflicts', path: '/field-ops/conflicts' },
     ],
   },
@@ -88,8 +87,9 @@ const navigation: NavItem[] = [
     children: [
       { label: 'Import Data', path: '/partners/import' },
       { label: 'Import History', path: '/partners/history' },
-      { label: 'Results', path: '/partners/results' },
+      { label: 'ODK Sync', path: '/partners/odk-sync' },
       { label: 'Stool Kits', path: '/partners/stool-kits' },
+      { label: 'Results', path: '/partners/results' },
     ],
   },
   {

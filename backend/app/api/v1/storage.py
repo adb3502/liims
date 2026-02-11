@@ -207,6 +207,7 @@ async def list_boxes(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     rack_id: uuid.UUID | None = None,
+    freezer_id: uuid.UUID | None = None,
     group_code: str | None = None,
     has_space: bool | None = None,
 ):
@@ -214,7 +215,8 @@ async def list_boxes(
     svc = StorageService(db)
     items, total = await svc.list_boxes(
         page=page, per_page=per_page,
-        rack_id=rack_id, group_code=group_code, has_space=has_space,
+        rack_id=rack_id, freezer_id=freezer_id,
+        group_code=group_code, has_space=has_space,
     )
     return {
         "success": True,

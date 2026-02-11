@@ -553,3 +553,197 @@ export interface SampleListParams extends ListParams {
   participant_id?: string
   wave?: number
 }
+
+// --- Field Operations ---
+
+export type FieldEventType = 'rural_mass' | 'urban_scheduled'
+
+export type FieldEventStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled'
+
+export type PartnerName = 'healthians' | '1mg' | 'lalpath' | 'decodeage'
+
+export type SyncStatus = 'pending' | 'synced' | 'conflict'
+
+export const FIELD_EVENT_TYPE_LABELS: Record<FieldEventType, string> = {
+  rural_mass: 'Rural Mass',
+  urban_scheduled: 'Urban Scheduled',
+}
+
+export const FIELD_EVENT_STATUS_LABELS: Record<FieldEventStatus, string> = {
+  planned: 'Planned',
+  in_progress: 'In Progress',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+}
+
+export const PARTNER_LABELS: Record<PartnerName, string> = {
+  healthians: 'Healthians',
+  '1mg': '1mg',
+  lalpath: 'Lal Path Labs',
+  decodeage: 'DecodeAge',
+}
+
+export interface FieldEvent {
+  id: string
+  event_name: string
+  event_date: string
+  collection_site_id: string
+  event_type: FieldEventType
+  expected_participants: number | null
+  actual_participants: number | null
+  status: FieldEventStatus | null
+  coordinator_id: string | null
+  partner_lab: PartnerName | null
+  notes: string | null
+  wave: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface FieldEventCreate {
+  event_name: string
+  event_date: string
+  collection_site_id: string
+  event_type: FieldEventType
+  expected_participants?: number
+  coordinator_id?: string
+  partner_lab?: PartnerName
+  notes?: string
+  wave?: number
+}
+
+export interface FieldEventParticipant {
+  id: string
+  event_id: string
+  participant_id: string
+  check_in_time: string | null
+  wrist_tag_issued: boolean
+  consent_verified: boolean
+  samples_collected: Record<string, boolean> | null
+  partner_samples: Record<string, unknown> | null
+  stool_kit_issued: boolean
+  urine_collected: boolean
+  notes: string | null
+  recorded_by: string | null
+  recorded_at: string | null
+  sync_status: SyncStatus
+  participant_code?: string
+}
+
+export interface FieldEventDetail extends FieldEvent {
+  event_participants: FieldEventParticipant[]
+}
+
+export interface FieldEventListParams extends ListParams {
+  status?: FieldEventStatus
+  collection_site_id?: string
+  date_from?: string
+  date_to?: string
+}
+
+// --- Partner / ODK ---
+
+export type OdkSyncStatus = 'running' | 'completed' | 'failed'
+export type OdkProcessingStatus = 'pending' | 'processed' | 'failed' | 'duplicate'
+export type MatchStatus = 'auto_matched' | 'manual_matched' | 'unmatched'
+export type StoolKitStatus = 'issued' | 'pickup_scheduled' | 'collected_by_decodeage' | 'processing' | 'results_received'
+
+export const STOOL_KIT_STATUS_LABELS: Record<StoolKitStatus, string> = {
+  issued: 'Issued',
+  pickup_scheduled: 'Pickup Scheduled',
+  collected_by_decodeage: 'Collected by DecodeAge',
+  processing: 'Processing',
+  results_received: 'Results Received',
+}
+
+export interface OdkFormConfig {
+  id: string
+  form_id: string
+  form_name: string
+  form_version: string
+  field_mapping: Record<string, string>
+  is_active: boolean
+  created_at: string
+  updated_by: string | null
+}
+
+export interface OdkSyncLog {
+  id: string
+  sync_started_at: string
+  sync_completed_at: string | null
+  status: OdkSyncStatus
+  submissions_found: number | null
+  submissions_processed: number | null
+  submissions_failed: number | null
+  error_message: string | null
+  created_by: string | null
+}
+
+export interface CanonicalTest {
+  id: string
+  canonical_name: string
+  display_name: string | null
+  category: string | null
+  standard_unit: string | null
+  reference_range_low: number | null
+  reference_range_high: number | null
+  is_active: boolean
+  created_at: string
+  aliases_count?: number
+}
+
+export interface TestNameAlias {
+  id: string
+  canonical_test_id: string
+  partner_name: PartnerName
+  alias_name: string
+  alias_unit: string | null
+  unit_conversion_factor: number
+  created_at: string
+}
+
+export interface PartnerLabImport {
+  id: string
+  partner_name: PartnerName
+  import_date: string
+  source_file_name: string | null
+  records_total: number | null
+  records_matched: number | null
+  records_failed: number | null
+  imported_by: string
+  notes: string | null
+  created_at: string
+}
+
+export interface PartnerLabResult {
+  id: string
+  import_id: string
+  participant_id: string | null
+  participant_code_raw: string | null
+  test_date: string | null
+  test_name_raw: string | null
+  canonical_test_id: string | null
+  test_value: string | null
+  test_unit: string | null
+  reference_range: string | null
+  is_abnormal: boolean | null
+  match_status: MatchStatus | null
+  created_at: string
+  canonical_test_name?: string
+}
+
+export interface StoolKit {
+  id: string
+  participant_id: string
+  field_event_id: string | null
+  kit_code: string | null
+  issued_at: string
+  issued_by: string | null
+  status: StoolKitStatus
+  decodeage_pickup_date: string | null
+  results_received_at: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}

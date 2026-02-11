@@ -274,6 +274,7 @@ export function useBoxes(params: {
   page?: number
   per_page?: number
   rack_id?: string
+  freezer_id?: string
   group_code?: string
   has_space?: boolean
 } = {}) {

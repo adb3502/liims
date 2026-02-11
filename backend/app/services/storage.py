@@ -256,6 +256,7 @@ class StorageService:
         page: int = 1,
         per_page: int = 20,
         rack_id: uuid.UUID | None = None,
+        freezer_id: uuid.UUID | None = None,
         group_code: str | None = None,
         has_space: bool | None = None,
     ) -> tuple[list[dict], int]:
@@ -263,6 +264,12 @@ class StorageService:
 
         if rack_id:
             query = query.where(StorageBox.rack_id == rack_id)
+        if freezer_id:
+            rack_ids_q = select(StorageRack.id).where(
+                StorageRack.freezer_id == freezer_id,
+                StorageRack.is_deleted == False,  # noqa: E712
+            )
+            query = query.where(StorageBox.rack_id.in_(rack_ids_q))
         if group_code:
             query = query.where(StorageBox.group_code == group_code)
 
@@ -308,16 +315,15 @@ class StorageService:
         if box is None:
             return None
 
-        # Build position list with sample codes
+        # Build position list with sample codes using a single JOIN (avoids N+1)
+        pos_result = await self.db.execute(
+            select(StoragePosition, Sample.sample_code)
+            .outerjoin(Sample, StoragePosition.sample_id == Sample.id)
+            .where(StoragePosition.box_id == box.id)
+            .order_by(StoragePosition.row, StoragePosition.column)
+        )
         positions = []
-        for pos in sorted(box.positions, key=lambda p: (p.row, p.column)):
-            sample_code = None
-            if pos.sample_id:
-                s_result = await self.db.execute(
-                    select(Sample.sample_code).where(Sample.id == pos.sample_id)
-                )
-                sample_code = s_result.scalar_one_or_none()
-
+        for pos, sample_code in pos_result.all():
             positions.append({
                 "id": pos.id,
                 "box_id": pos.box_id,
@@ -434,12 +440,10 @@ class StorageService:
         assigned_by: uuid.UUID,
     ) -> StoragePosition:
         """Assign a sample to a storage position with row-level locking."""
-        # Lock the position row to prevent race conditions (SKIP LOCKED
-        # lets concurrent requests skip already-locked rows instead of blocking)
         result = await self.db.execute(
             select(StoragePosition)
             .where(StoragePosition.id == position_id)
-            .with_for_update(skip_locked=True)
+            .with_for_update()
         )
         position = result.scalar_one_or_none()
         if position is None:
@@ -497,7 +501,7 @@ class StorageService:
         result = await self.db.execute(
             select(StoragePosition)
             .where(StoragePosition.id == position_id)
-            .with_for_update(skip_locked=True)
+            .with_for_update()
         )
         position = result.scalar_one_or_none()
         if position is None:
@@ -825,6 +829,13 @@ class StorageService:
 
     async def search_storage(self, sample_code: str) -> list[dict]:
         """Find where a sample is stored: position -> box -> rack -> freezer."""
+        # Escape ILIKE metacharacters to prevent wildcard injection
+        safe_code = (
+            sample_code
+            .replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
+        )
         result = await self.db.execute(
             select(
                 Sample.id.label("sample_id"),
@@ -844,9 +855,10 @@ class StorageService:
             .join(StorageRack, StorageBox.rack_id == StorageRack.id)
             .join(Freezer, StorageRack.freezer_id == Freezer.id)
             .where(
-                Sample.sample_code.ilike(f"%{sample_code}%"),
+                Sample.sample_code.ilike(f"%{safe_code}%"),
                 Sample.is_deleted == False,  # noqa: E712
             )
+            .limit(100)
         )
         rows = result.all()
         return [

@@ -86,7 +86,7 @@ export function FreezerDetailPage() {
 
   const { data: freezer, isLoading, isError } = useFreezer(id!)
   const { data: racks } = useRacks(id!)
-  const { data: boxes } = useBoxes({ rack_id: undefined, per_page: 100 })
+  const { data: boxes } = useBoxes({ freezer_id: id, per_page: 200 })
   const { data: tempData } = useTempEvents(id!, { per_page: 20 })
 
   const canWrite = hasRole('super_admin', 'lab_manager', 'lab_technician')
