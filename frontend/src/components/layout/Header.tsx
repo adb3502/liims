@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notifications'
+import { SyncStatusBadge } from '@/components/offline/SyncStatusBadge'
 import { cn } from '@/lib/utils'
 import { Bell, LogOut, User, Settings, Menu } from 'lucide-react'
 
@@ -70,6 +71,9 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
 
       {/* Right side actions */}
       <div className="flex items-center gap-2">
+        {/* Sync status badge */}
+        <SyncStatusBadge />
+
         {/* Notification bell */}
         <div className="relative" ref={notifRef}>
           <button

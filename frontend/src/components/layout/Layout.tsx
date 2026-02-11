@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 import { Breadcrumbs } from './Breadcrumbs'
+import { OfflineBanner } from '@/components/offline/OfflineBanner'
 import { cn } from '@/lib/utils'
 
 export function Layout() {
@@ -51,6 +52,7 @@ export function Layout() {
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header onMobileMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
+        <OfflineBanner />
         <main className="flex-1 overflow-y-auto">
           <div className="p-4 lg:p-6">
             <div className="mb-4">

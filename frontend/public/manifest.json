@@ -3,15 +3,21 @@
   "short_name": "LIIMS",
   "description": "Laboratory Information Management System for the BHARAT Study at IISc Bangalore",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#3674F6",
   "orientation": "any",
+  "categories": ["medical", "productivity"],
   "icons": [
     {
       "src": "/vite.svg",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any"
     }
-  ]
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false,
+  "related_applications": []
 }

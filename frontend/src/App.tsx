@@ -4,6 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { routes } from '@/router'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notifications'
+import { getToken } from '@/lib/api'
+import { syncTokenToOfflineStore } from '@/lib/offline-store'
+import { startSyncManager, stopSyncManager } from '@/lib/sync-manager'
 import { ToastContainer } from '@/components/ui/toast'
 import { PageSpinner } from '@/components/ui/spinner'
 
@@ -30,10 +33,21 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isAuthenticated) {
       startPolling()
+      // Sync auth token to IndexedDB for service worker background sync
+      const token = getToken()
+      if (token) {
+        syncTokenToOfflineStore(token)
+      }
+      // Start the offline sync manager
+      startSyncManager()
     } else {
       stopPolling()
+      stopSyncManager()
     }
-    return () => stopPolling()
+    return () => {
+      stopPolling()
+      stopSyncManager()
+    }
   }, [isAuthenticated, startPolling, stopPolling])
 
   if (isLoading) {
