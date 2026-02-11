@@ -75,6 +75,24 @@ cd backend && celery -A app.celery_app:celery worker -l info
 cd backend && celery -A app.celery_app:celery beat -l info
 ```
 
+## Branding — Longevity India
+
+**Logo files**: `frontend/public/logo-icon.svg`, `logo.svg`, `logo-icon.png`, `logo-horizontal.png`
+**Font**: **Manrope** (Google Font) — for ALL text (headings AND body). Monospace: JetBrains Mono for codes/IDs.
+**Primary Colors**:
+- Primary Blue: `#3674F6`
+- Primary Teal: `#03B6D9`
+- Gradient: `#3674F6 → #03B6D9` (use for primary buttons, hero elements)
+**Supporting Colors**:
+- Light Blue: `#D0E4FF` (backgrounds, highlights)
+- Lavender: `#EDF0F5` (secondary backgrounds)
+- Light Gray: `#E3E3E3` (borders, dividers)
+**Semantic Colors** (keep from before):
+- Success: `#059669` (emerald-600)
+- Warning: `#D97706` (amber-600)
+- Danger: `#DC2626` (red-600)
+**Dark mode sidebar**: `#1E293B` (slate-800) with logo in white variant
+
 ## Key Conventions
 
 - **Frontend agents MUST use the `/frontend-design` skill (via Skill tool) before building any page or component** — no exceptions

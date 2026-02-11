@@ -4,6 +4,9 @@ import { Layout } from '@/components/layout/Layout'
 import { LoginPage } from '@/pages/LoginPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { DashboardPage } from '@/pages/DashboardPage'
+import { ParticipantListPage } from '@/features/participants/ParticipantListPage'
+import { ParticipantDetailPage } from '@/features/participants/ParticipantDetailPage'
+import { ParticipantForm } from '@/features/participants/ParticipantForm'
 import { PageSpinner } from '@/components/ui/spinner'
 import type { UserRole } from '@/types'
 
@@ -101,17 +104,17 @@ export const routes: RouteObject[] = [
       {
         path: 'participants',
         children: [
-          { index: true, element: <PlaceholderPage title="Participants" /> },
+          { index: true, element: <ParticipantListPage /> },
           {
             path: 'create',
             element: (
-              <RoleGuard roles={['super_admin', 'lab_manager']}>
-                <PlaceholderPage title="Create Participant" />
+              <RoleGuard roles={['super_admin', 'lab_manager', 'data_entry', 'field_coordinator']}>
+                <ParticipantForm />
               </RoleGuard>
             ),
           },
           { path: 'odk-sync', element: <PlaceholderPage title="ODK Sync Status" /> },
-          { path: ':id', element: <PlaceholderPage title="Participant Detail" /> },
+          { path: ':id', element: <ParticipantDetailPage /> },
         ],
       },
 
@@ -209,7 +212,7 @@ export const routes: RouteObject[] = [
         path: 'admin',
         element: (
           <RoleGuard roles={['super_admin', 'lab_manager']}>
-            <></>
+            <Outlet />
           </RoleGuard>
         ),
         children: [

@@ -42,17 +42,31 @@ async def seed_super_admin(session: AsyncSession) -> None:
 
 
 DEFAULT_SETTINGS = [
+    # Session
     ("session", "timeout_minutes", "30", SettingValueType.INTEGER, "Session inactivity timeout in minutes"),
     ("session", "max_concurrent", "3", SettingValueType.INTEGER, "Maximum concurrent sessions per user"),
+    # ODK
     ("odk", "sync_interval_minutes", "60", SettingValueType.INTEGER, "ODK sync interval in minutes"),
     ("odk", "central_url", "", SettingValueType.STRING, "ODK Central server URL"),
+    # Email
     ("email", "smtp_host", "", SettingValueType.STRING, "SMTP server hostname"),
     ("email", "smtp_port", "587", SettingValueType.INTEGER, "SMTP server port"),
     ("email", "smtp_use_tls", "true", SettingValueType.BOOLEAN, "Use TLS for SMTP"),
     ("email", "from_name", "LIIMS Alerts", SettingValueType.STRING, "Email from name"),
+    # Dashboard
     ("dashboard", "refresh_interval_minutes", "15", SettingValueType.INTEGER, "Dashboard cache refresh interval"),
+    ("dashboard", "default_page_size", "25", SettingValueType.INTEGER, "Default pagination page size"),
+    # Backup
     ("backup", "check_interval_hours", "24", SettingValueType.INTEGER, "Backup staleness check interval"),
-    ("storage", "plasma_processing_timeout_min", "30", SettingValueType.INTEGER, "Plasma processing timeout in minutes"),
+    # Processing
+    ("processing", "plasma_timer_minutes", "30", SettingValueType.INTEGER, "Plasma processing timeout in minutes"),
+    ("processing", "timer_warning_minutes", "20", SettingValueType.INTEGER, "Processing timer warning threshold in minutes"),
+    ("processing", "volume_warning_threshold_ul", "100", SettingValueType.INTEGER, "Volume warning threshold in microlitres"),
+    # Study
+    ("study", "current_wave", "1", SettingValueType.INTEGER, "Current study wave number"),
+    ("study", "enrollment_active", "true", SettingValueType.BOOLEAN, "Whether new enrollment is active"),
+    # Aliquot rules
+    ("study", "aliquot_rules", '{"plasma":{"count":5,"volume_ul":500},"epigenetics":{"count":4,"volume_ul":570},"urine":{"count":1,"volume_ul":3750},"hair":{"count":2},"cheek_swab":{"count":1},"rbc_smear":{"count":1},"extra_blood":{"count":1}}', SettingValueType.JSON, "Auto-aliquot generation rules per sample type"),
 ]
 
 

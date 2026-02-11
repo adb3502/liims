@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { FlaskConical, Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 import { Spinner } from '@/components/ui/spinner'
 
 const loginSchema = z.object({
@@ -46,10 +46,15 @@ export function LoginPage() {
       <div className="w-full max-w-md">
         {/* Branding */}
         <div className="mb-8 text-center">
-          <div className="inline-flex items-center justify-center rounded-xl bg-primary/10 p-3 mb-4">
-            <FlaskConical className="h-8 w-8 text-primary" />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          <img
+            src="/logo-icon.svg"
+            alt="LIIMS"
+            className="mx-auto h-14 w-14 mb-4"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none'
+            }}
+          />
+          <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
             LIIMS
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">

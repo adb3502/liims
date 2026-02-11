@@ -20,7 +20,7 @@ interface NavItem {
   label: string
   path: string
   icon: React.ReactNode
-  roles?: UserRole[] // If undefined, visible to all
+  roles?: UserRole[]
   children?: Array<{ label: string; path: string; roles?: UserRole[] }>
 }
 
@@ -96,12 +96,7 @@ const navigation: NavItem[] = [
     label: 'Instruments',
     path: '/instruments',
     icon: <Microscope className="h-5 w-5" />,
-    roles: [
-      'super_admin',
-      'lab_manager',
-      'lab_technician',
-      'pi_researcher',
-    ],
+    roles: ['super_admin', 'lab_manager', 'lab_technician', 'pi_researcher'],
     children: [
       { label: 'Dashboard', path: '/instruments' },
       { label: 'Queue', path: '/instruments/queue' },
@@ -164,22 +159,36 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'flex h-screen flex-col border-r border-border bg-card transition-[width] duration-200',
+        'flex h-screen flex-col bg-sidebar text-sidebar-foreground transition-[width] duration-200',
         collapsed ? 'w-16' : 'w-64'
       )}
     >
       {/* Logo area */}
-      <div className="flex h-16 items-center border-b border-border px-4">
-        {!collapsed && (
-          <div className="flex items-center gap-2">
-            <FlaskConical className="h-6 w-6 text-primary" />
-            <span className="text-lg font-bold tracking-tight text-foreground">
+      <div className="flex h-16 items-center px-4 border-b border-sidebar-muted">
+        {!collapsed ? (
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/logo-icon.svg"
+              alt=""
+              className="h-7 w-7"
+              onError={(e) => {
+                // Fallback if logo not yet available
+                e.currentTarget.style.display = 'none'
+              }}
+            />
+            <span className="text-lg font-bold tracking-tight text-white">
               LIIMS
             </span>
           </div>
-        )}
-        {collapsed && (
-          <FlaskConical className="mx-auto h-6 w-6 text-primary" />
+        ) : (
+          <img
+            src="/logo-icon.svg"
+            alt="LIIMS"
+            className="mx-auto h-7 w-7"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none'
+            }}
+          />
         )}
       </div>
 
@@ -199,8 +208,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   className={cn(
                     'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                     active
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                      ? 'bg-sidebar-accent text-white'
+                      : 'text-sidebar-foreground/70 hover:bg-sidebar-muted hover:text-white'
                   )}
                   title={collapsed ? item.label : undefined}
                 >
@@ -209,7 +218,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 </NavLink>
 
                 {showChildren && (
-                  <ul className="ml-8 mt-1 space-y-1">
+                  <ul className="ml-8 mt-1 space-y-0.5">
                     {item.children!.map((child) => {
                       if (!hasAccess(child.roles)) return null
                       return (
@@ -220,8 +229,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                               cn(
                                 'block rounded-md px-3 py-1.5 text-sm transition-colors',
                                 linkActive
-                                  ? 'font-medium text-primary'
-                                  : 'text-muted-foreground hover:text-foreground'
+                                  ? 'font-medium text-white'
+                                  : 'text-sidebar-foreground/60 hover:text-white'
                               )
                             }
                           >
@@ -239,10 +248,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </nav>
 
       {/* Collapse toggle */}
-      <div className="border-t border-border p-2">
+      <div className="border-t border-sidebar-muted p-2">
         <button
           onClick={onToggle}
-          className="flex w-full items-center justify-center rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
+          className="flex w-full items-center justify-center rounded-md p-2 text-sidebar-foreground/60 hover:bg-sidebar-muted hover:text-white transition-colors cursor-pointer"
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? (
