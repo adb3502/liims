@@ -1,7 +1,6 @@
 """Authentication endpoints: login, logout, refresh, change-password, password reset."""
 
 import logging
-import secrets
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status

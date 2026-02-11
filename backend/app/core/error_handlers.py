@@ -71,10 +71,15 @@ async def value_error_handler(
     request: Request, exc: ValueError
 ) -> JSONResponse:
     """Handle ValueError raised by service layer for business-rule violations."""
+    message = str(exc)
+    if not settings.DEBUG:
+        # Only expose safe, short messages; suppress potentially internal details
+        if len(message) > 200 or "sqlalchemy" in message.lower() or "traceback" in message.lower():
+            message = "Invalid request. Please check your input and try again."
     return _error_response(
         status_code=status.HTTP_400_BAD_REQUEST,
         code="BAD_REQUEST",
-        message=str(exc),
+        message=message,
     )
 
 

@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { ArrowLeft } from 'lucide-react'
-import { useState, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import type { SampleType } from '@/types'
 
 const SAMPLE_TYPE_OPTIONS: { value: SampleType; label: string; hasVolume: boolean }[] = [
@@ -43,7 +43,7 @@ type SampleFormData = z.infer<typeof sampleSchema>
 
 function useDebounce(value: string, delay: number): string {
   const [debounced, setDebounced] = useState(value)
-  useMemo(() => {
+  useEffect(() => {
     const timer = setTimeout(() => setDebounced(value), delay)
     return () => clearTimeout(timer)
   }, [value, delay])

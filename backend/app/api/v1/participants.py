@@ -50,7 +50,7 @@ async def list_participants(
     sex: str | None = None,
     wave: int | None = None,
     sort: str = "created_at",
-    order: str = "desc",
+    order: str = Query("desc", pattern="^(asc|desc)$"),
 ):
     """List participants with pagination, fuzzy search, and filters."""
     svc = ParticipantService(db)

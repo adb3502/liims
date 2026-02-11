@@ -48,7 +48,7 @@ async def list_field_events(
     date_from: date | None = None,
     date_to: date | None = None,
     sort: str = "event_date",
-    order: str = "desc",
+    order: str = Query("desc", pattern="^(asc|desc)$"),
 ):
     """List field events with pagination and filters."""
     svc = FieldEventService(db)

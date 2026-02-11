@@ -4,6 +4,8 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { extractErrorMessage } from '@/lib/api'
+import { toast } from '@/components/ui/toast'
 import type {
   FieldEvent,
   FieldEventCreate,
@@ -66,6 +68,10 @@ export function useCreateFieldEvent() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: fieldEventKeys.lists() })
+      toast({ description: 'Field event created successfully.', variant: 'success' })
+    },
+    onError: (error) => {
+      toast({ description: extractErrorMessage(error), variant: 'destructive' })
     },
   })
 }
@@ -83,6 +89,10 @@ export function useUpdateFieldEvent(id: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: fieldEventKeys.detail(id) })
       qc.invalidateQueries({ queryKey: fieldEventKeys.lists() })
+      toast({ description: 'Field event updated.', variant: 'success' })
+    },
+    onError: (error) => {
+      toast({ description: extractErrorMessage(error), variant: 'destructive' })
     },
   })
 }
@@ -99,6 +109,10 @@ export function useAddParticipants(eventId: string) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: fieldEventKeys.detail(eventId) })
+      toast({ description: 'Participants added to event.', variant: 'success' })
+    },
+    onError: (error) => {
+      toast({ description: extractErrorMessage(error), variant: 'destructive' })
     },
   })
 }
@@ -121,6 +135,10 @@ export function useCheckInParticipant(eventId: string) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: fieldEventKeys.detail(eventId) })
+      toast({ description: 'Participant checked in.', variant: 'success' })
+    },
+    onError: (error) => {
+      toast({ description: extractErrorMessage(error), variant: 'destructive' })
     },
   })
 }
@@ -145,6 +163,10 @@ export function useBulkDigitize(eventId: string) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: fieldEventKeys.detail(eventId) })
+      toast({ description: 'Bulk digitization completed.', variant: 'success' })
+    },
+    onError: (error) => {
+      toast({ description: extractErrorMessage(error), variant: 'destructive' })
     },
   })
 }

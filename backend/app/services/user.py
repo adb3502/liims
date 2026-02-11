@@ -181,6 +181,6 @@ class UserService:
             action=AuditAction.UPDATE,
             entity_type="user",
             entity_id=user.id,
-            context={"event": "admin_password_reset"},
+            additional_context={"event": "admin_password_reset"},
         ))
         return True

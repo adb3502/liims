@@ -49,7 +49,7 @@ export function ImportHistoryPage() {
   }), [page, partnerFilter])
 
   const { data, isLoading, isError } = useImportHistory(queryParams)
-  const { data: importDetail } = useImportDetail(selectedImportId ?? '')
+  const { data: importDetail } = useImportDetail(selectedImportId ?? undefined)
 
   const imports = data?.data ?? []
   const totalPages = data?.meta ? Math.ceil(data.meta.total / data.meta.per_page) : 0

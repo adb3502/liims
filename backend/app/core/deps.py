@@ -1,6 +1,7 @@
 """FastAPI dependencies for auth, DB session, and RBAC."""
 
 import uuid
+from datetime import datetime, timezone
 from typing import Annotated
 
 import jwt
@@ -47,10 +48,12 @@ async def get_current_user(
 
     # C-03: Verify session has not been revoked
     token_hash = hash_token(token)
+    now = datetime.now(timezone.utc)
     session_result = await db.execute(
         select(UserSession.id).where(
             UserSession.token_hash == token_hash,
-            UserSession.is_active == True,  # noqa: E712
+            UserSession.revoked_at.is_(None),
+            UserSession.expires_at > now,
         )
     )
     if session_result.scalar_one_or_none() is None:

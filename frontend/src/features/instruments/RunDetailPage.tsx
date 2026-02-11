@@ -70,16 +70,28 @@ export function RunDetailPage() {
   const navigate = useNavigate()
   const { hasRole } = useAuth()
 
-  const { data: run, isLoading, isError } = useRunDetail(id!)
-  const startMutation = useStartRun(id!)
-  const completeMutation = useCompleteRun(id!)
-  const uploadMutation = useUploadRunResults(id!)
+  const runId = id ?? ''
+  const { data: run, isLoading, isError } = useRunDetail(runId)
+  const startMutation = useStartRun(runId)
+  const completeMutation = useCompleteRun(runId)
+  const uploadMutation = useUploadRunResults(runId)
 
   const [showCompleteDialog, setShowCompleteDialog] = useState(false)
   const [showFailDialog, setShowFailDialog] = useState(false)
   const [showUploadDialog, setShowUploadDialog] = useState(false)
 
   const canManage = hasRole('super_admin', 'lab_manager', 'lab_technician')
+
+  if (!id) {
+    return (
+      <div className="rounded-lg border border-danger/20 bg-danger/5 p-8 text-center">
+        <p className="text-sm text-danger">No run ID provided.</p>
+        <Button variant="outline" className="mt-4" onClick={() => navigate('/instruments/runs')}>
+          Back to Runs
+        </Button>
+      </div>
+    )
+  }
 
   if (isLoading) return <PageSpinner />
 
@@ -330,7 +342,7 @@ export function RunDetailPage() {
         <CompleteRunDialog
           open={showCompleteDialog}
           onClose={() => setShowCompleteDialog(false)}
-          runId={id!}
+          runId={id}
         />
       )}
 
@@ -339,7 +351,7 @@ export function RunDetailPage() {
         <FailRunDialog
           open={showFailDialog}
           onClose={() => setShowFailDialog(false)}
-          runId={id!}
+          runId={id}
         />
       )}
 
@@ -348,7 +360,7 @@ export function RunDetailPage() {
         <UploadResultsDialog
           open={showUploadDialog}
           onClose={() => setShowUploadDialog(false)}
-          runId={id!}
+          runId={id}
         />
       )}
     </div>

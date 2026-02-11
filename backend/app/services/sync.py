@@ -4,13 +4,16 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enums import AuditAction, SyncStatus
+from app.models.enums import AuditAction, SampleStatus, SyncStatus
+from app.models.field_ops import FieldEventParticipant
 from app.models.participant import Participant
-from app.models.sample import Sample
+from app.models.partner import StoolKit
+from app.models.sample import Sample, SampleStatusHistory
 from app.models.user import AuditLog
+from app.services.sample import VALID_TRANSITIONS
 
 logger = logging.getLogger(__name__)
 
@@ -258,11 +261,27 @@ class SyncService:
             if existing.scalar_one_or_none() is not None:
                 return {"status": "skipped"}
 
+        # Get participant code for sample_code generation
+        p_code_result = await self.db.execute(
+            select(Participant.participant_code).where(
+                Participant.id == uuid.UUID(participant_id),
+            )
+        )
+        participant_code = p_code_result.scalar_one_or_none() or "UNKNOWN"
+
+        # Generate sample_code: {participant_code}-{subtype_or_type}-SYNC-{short_id}
+        sample_type = payload.get("sample_type", "plasma")
+        subtype = payload.get("sample_subtype") or sample_type
+        short_id = uuid.uuid4().hex[:6].upper()
+        sample_code = f"{participant_code}-{subtype}-S{short_id}"
+
         sample = Sample(
             id=uuid.uuid4(),
+            sample_code=sample_code,
             participant_id=uuid.UUID(participant_id),
-            sample_type=payload.get("sample_type", "plasma"),
+            sample_type=sample_type,
             sample_subtype=payload.get("sample_subtype"),
+            status=SampleStatus.COLLECTED,
             initial_volume_ul=payload.get("initial_volume_ul"),
             collection_site_id=uuid.UUID(payload["collection_site_id"]) if payload.get("collection_site_id") else None,
             wave=payload.get("wave", 1),
@@ -320,10 +339,33 @@ class SyncService:
             )
             return {"status": "conflict", "conflict": conflict.to_dict()}
 
-        new_status = payload.get("status")
-        if new_status:
+        new_status_str = payload.get("status")
+        if new_status_str:
+            # Convert string to enum if needed
+            try:
+                new_status = SampleStatus(new_status_str) if isinstance(new_status_str, str) else new_status_str
+            except ValueError:
+                return {"status": "skipped", "reason": "invalid_status"}
+
+            # Validate transition against VALID_TRANSITIONS
+            allowed = VALID_TRANSITIONS.get(sample.status, set())
+            if new_status not in allowed:
+                return {"status": "skipped", "reason": "invalid_transition"}
+
             old_status = sample.status
             sample.status = new_status
+
+            # Create SampleStatusHistory entry for audit trail
+            self.db.add(SampleStatusHistory(
+                id=uuid.uuid4(),
+                sample_id=sample.id,
+                previous_status=old_status,
+                new_status=new_status,
+                changed_by=user_id,
+                changed_at=datetime.now(timezone.utc),
+                notes="Offline sync status update",
+            ))
+
             self.db.add(AuditLog(
                 id=uuid.uuid4(),
                 user_id=user_id,
@@ -331,7 +373,7 @@ class SyncService:
                 entity_type="sample",
                 entity_id=sample.id,
                 old_values={"status": old_status.value if hasattr(old_status, 'value') else str(old_status)},
-                new_values={"status": new_status, "event": "offline_status_update"},
+                new_values={"status": new_status.value if hasattr(new_status, 'value') else str(new_status), "event": "offline_status_update"},
             ))
 
         return {"status": "applied"}
@@ -344,7 +386,13 @@ class SyncService:
         payload: dict,
         user_id: uuid.UUID,
     ) -> dict:
-        """Generic update handler for simple mutations."""
+        """Generic update handler for stool_kit_issue and event_participant_update."""
+        if mutation_type == "stool_kit_issue":
+            return await self._apply_stool_kit_issue(entity_id, payload, user_id)
+        elif mutation_type == "event_participant_update":
+            return await self._apply_event_participant_update(entity_id, payload, user_id)
+
+        # Fallback: log only for truly unknown types
         self.db.add(AuditLog(
             id=uuid.uuid4(),
             user_id=user_id,
@@ -353,6 +401,81 @@ class SyncService:
             entity_id=uuid.UUID(entity_id) if entity_id else None,
             new_values={"event": f"offline_{mutation_type}", **payload},
         ))
+        return {"status": "applied"}
+
+    async def _apply_stool_kit_issue(
+        self,
+        entity_id: str | None,
+        payload: dict,
+        user_id: uuid.UUID,
+    ) -> dict:
+        """Issue a stool kit from offline data."""
+        participant_id = payload.get("participant_id") or entity_id
+        if not participant_id:
+            return {"status": "skipped"}
+
+        kit = StoolKit(
+            id=uuid.uuid4(),
+            participant_id=uuid.UUID(participant_id),
+            field_event_id=uuid.UUID(payload["field_event_id"]) if payload.get("field_event_id") else None,
+            kit_code=payload.get("kit_code"),
+            issued_at=datetime.now(timezone.utc),
+            issued_by=user_id,
+        )
+        self.db.add(kit)
+        await self.db.flush()
+
+        self.db.add(AuditLog(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            action=AuditAction.CREATE,
+            entity_type="stool_kit",
+            entity_id=kit.id,
+            new_values={"event": "offline_stool_kit_issue", **payload},
+        ))
+        return {"status": "applied"}
+
+    async def _apply_event_participant_update(
+        self,
+        entity_id: str | None,
+        payload: dict,
+        user_id: uuid.UUID,
+    ) -> dict:
+        """Update a field event participant record from offline data."""
+        if not entity_id:
+            return {"status": "skipped"}
+
+        result = await self.db.execute(
+            select(FieldEventParticipant).where(
+                FieldEventParticipant.id == uuid.UUID(entity_id),
+            )
+        )
+        fep = result.scalar_one_or_none()
+        if fep is None:
+            return {"status": "skipped"}
+
+        # Apply updatable fields
+        updatable_fields = (
+            "check_in_time", "wrist_tag_issued", "consent_verified",
+            "samples_collected", "partner_samples", "stool_kit_issued",
+            "urine_collected", "notes",
+        )
+        changed = False
+        for field in updatable_fields:
+            if field in payload:
+                setattr(fep, field, payload[field])
+                changed = True
+
+        if changed:
+            self.db.add(AuditLog(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                action=AuditAction.UPDATE,
+                entity_type="field_event_participant",
+                entity_id=fep.id,
+                new_values={"event": "offline_event_participant_update", **payload},
+            ))
+
         return {"status": "applied"}
 
     async def get_pull_data(

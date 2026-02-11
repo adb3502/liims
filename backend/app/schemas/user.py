@@ -3,9 +3,10 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.models.enums import UserRole
+from app.schemas.auth import _validate_password_complexity
 
 
 class UserCreate(BaseModel):
@@ -13,6 +14,11 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=8)
     full_name: str = Field(min_length=1, max_length=200)
     role: UserRole
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        return _validate_password_complexity(v)
 
 
 class UserUpdate(BaseModel):

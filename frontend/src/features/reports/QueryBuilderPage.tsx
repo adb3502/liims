@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import {
   useQueryEntities,
   useExecuteQuery,
@@ -45,9 +45,8 @@ interface FilterRow {
   value: string
 }
 
-let filterIdCounter = 1
-
 export function QueryBuilderPage() {
+  const filterIdCounter = useRef(1)
   const { data: entities, isLoading: entitiesLoading } = useQueryEntities()
   const executeQuery = useExecuteQuery()
   const exportQuery = useExportQuery()
@@ -74,7 +73,7 @@ export function QueryBuilderPage() {
     setFilters((prev) => [
       ...prev,
       {
-        id: filterIdCounter++,
+        id: filterIdCounter.current++,
         field: firstField.name,
         operator: firstField.operators[0] ?? 'eq',
         value: '',

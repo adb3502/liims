@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
 import { useDashboardOverview } from '@/api/dashboard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -162,14 +163,14 @@ export function DashboardPage() {
       {/* Quick links */}
       <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: 'Enrollment', href: '/reports/enrollment', icon: Users, color: 'text-[#3674F6]' },
-          { label: 'Inventory', href: '/reports/inventory', icon: FlaskConical, color: 'text-[#03B6D3]' },
-          { label: 'Quality', href: '/reports/quality', icon: BarChart3, color: 'text-emerald-500' },
-          { label: 'Query Builder', href: '/reports/query-builder', icon: Activity, color: 'text-amber-500' },
+          { label: 'Enrollment', to: '/reports/enrollment', icon: Users, color: 'text-[#3674F6]' },
+          { label: 'Inventory', to: '/reports/inventory', icon: FlaskConical, color: 'text-[#03B6D3]' },
+          { label: 'Quality', to: '/reports/quality', icon: BarChart3, color: 'text-emerald-500' },
+          { label: 'Query Builder', to: '/reports/query-builder', icon: Activity, color: 'text-amber-500' },
         ].map((link) => (
-          <a
-            key={link.href}
-            href={link.href}
+          <Link
+            key={link.to}
+            to={link.to}
             className="flex items-center gap-3 rounded-lg border border-border p-4 hover:bg-muted/50 hover:border-primary/30 transition-all group"
           >
             <link.icon className={cn('h-5 w-5', link.color)} />
@@ -177,7 +178,7 @@ export function DashboardPage() {
               <div className="text-sm font-medium group-hover:text-primary transition-colors">{link.label} Dashboard</div>
               <div className="text-xs text-muted-foreground">View details</div>
             </div>
-          </a>
+          </Link>
         ))}
       </div>
     </div>

@@ -474,18 +474,18 @@ class ReportService:
         # Audit trail summary (last 30 days)
         thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
         audit_total_q = select(func.count(AuditLog.id)).where(
-            AuditLog.created_at >= thirty_days_ago
+            AuditLog.timestamp >= thirty_days_ago
         )
         total_audit = (await self.db.execute(audit_total_q)).scalar_one()
 
         audit_users_q = select(func.count(func.distinct(AuditLog.user_id))).where(
-            AuditLog.created_at >= thirty_days_ago
+            AuditLog.timestamp >= thirty_days_ago
         )
         audit_users = (await self.db.execute(audit_users_q)).scalar_one()
 
         audit_action_q = (
             select(AuditLog.action, func.count(AuditLog.id))
-            .where(AuditLog.created_at >= thirty_days_ago)
+            .where(AuditLog.timestamp >= thirty_days_ago)
             .group_by(AuditLog.action)
             .order_by(func.count(AuditLog.id).desc())
         )
@@ -497,7 +497,7 @@ class ReportService:
 
         audit_entity_q = (
             select(AuditLog.entity_type, func.count(AuditLog.id))
-            .where(AuditLog.created_at >= thirty_days_ago)
+            .where(AuditLog.timestamp >= thirty_days_ago)
             .group_by(AuditLog.entity_type)
             .order_by(func.count(AuditLog.id).desc())
             .limit(10)

@@ -89,7 +89,6 @@ async def update_setting(
             detail=f"Setting '{category}/{key}' not found.",
         )
 
-    await db.commit()
     return {
         "success": True,
         "data": SystemSettingRead.model_validate(setting).model_dump(mode="json"),

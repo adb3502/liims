@@ -311,12 +311,21 @@ class WatchDirectoryService:
         ingested: list[ManagedFile] = []
 
         for entry in sorted(dir_path.iterdir()):
+            # Skip symlinks to prevent path traversal attacks
+            if entry.is_symlink():
+                logger.warning("Skipping symlink: %s", entry)
+                continue
             if not entry.is_file():
                 continue
             if not fnmatch(entry.name, watch_dir.file_pattern):
                 continue
 
             full_path = str(entry.resolve())
+
+            # Verify resolved path is within the watch directory
+            if not full_path.startswith(str(dir_path.resolve())):
+                logger.warning("Path traversal attempt: %s -> %s", entry, full_path)
+                continue
 
             # Skip if already registered
             if full_path in existing_paths:

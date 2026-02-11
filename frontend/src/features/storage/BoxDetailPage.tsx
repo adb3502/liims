@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   useBoxDetail,
@@ -98,7 +98,7 @@ export function BoxDetailPage() {
   const [showAssignDialog, setShowAssignDialog] = useState(false)
   const [showUnassignDialog, setShowUnassignDialog] = useState(false)
 
-  const { data: box, isLoading, isError } = useBoxDetail(id!)
+  const { data: box, isLoading, isError } = useBoxDetail(id ?? '')
   const canWrite = hasRole('super_admin', 'lab_manager', 'lab_technician')
 
   // Build the grid map: [row][col] -> position
@@ -253,10 +253,9 @@ export function BoxDetailPage() {
 
             {/* Rows */}
             {grid.map((row, ri) => (
-              <>
+              <Fragment key={`row-${ri}`}>
                 {/* Row header */}
                 <div
-                  key={`rh-${ri}`}
                   className="flex items-center justify-center text-[10px] font-bold text-muted-foreground tabular-nums"
                 >
                   {ri + 1}
@@ -305,7 +304,7 @@ export function BoxDetailPage() {
                     </button>
                   )
                 })}
-              </>
+              </Fragment>
             ))}
           </div>
         </div>

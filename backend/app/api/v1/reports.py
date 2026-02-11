@@ -1,5 +1,6 @@
 """Report generation, scheduled report CRUD, and preview endpoints."""
 
+import logging
 import math
 import uuid
 from datetime import datetime, timezone
@@ -23,6 +24,8 @@ from app.schemas.report import (
     ScheduledReportUpdate,
 )
 from app.services.report import ReportService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -259,9 +262,10 @@ async def _generate_pdf(
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("Report generation failed for type=%s", report_type)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Report generation failed: {str(e)}",
+            detail="Report generation failed. Please try again or contact support.",
         )
 
 

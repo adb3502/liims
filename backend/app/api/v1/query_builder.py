@@ -111,7 +111,7 @@ async def list_entities(
     return {"success": True, "data": _get_entity_list()}
 
 
-@router.post("/export", response_model=dict)
+@router.post("/export")
 async def export_query(
     data: QueryExportRequest,
     request: Request,

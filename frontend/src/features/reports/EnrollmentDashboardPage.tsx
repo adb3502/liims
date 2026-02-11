@@ -6,6 +6,20 @@ import { PageSpinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 import { Users, TrendingUp, Layers, MapPin } from 'lucide-react'
 
+const ACCENT_LIGHT: Record<string, string> = {
+  'bg-[#3674F6]': 'bg-blue-50',
+  'bg-[#03B6D3]': 'bg-cyan-50',
+  'bg-emerald-500': 'bg-emerald-50',
+  'bg-amber-500': 'bg-amber-50',
+}
+
+const ACCENT_TEXT: Record<string, string> = {
+  'bg-[#3674F6]': 'text-[#3674F6]',
+  'bg-[#03B6D3]': 'text-[#03B6D3]',
+  'bg-emerald-500': 'text-emerald-500',
+  'bg-amber-500': 'text-amber-500',
+}
+
 function StatCard({
   title,
   value,
@@ -24,8 +38,8 @@ function StatCard({
       <div className={cn('absolute top-0 left-0 w-1 h-full', accent)} />
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <div className={cn('rounded-lg p-2', accent.replace('bg-', 'bg-').replace('-500', '-50'))}>
-          <Icon className={cn('h-4 w-4', accent.replace('bg-', 'text-'))} />
+        <div className={cn('rounded-lg p-2', ACCENT_LIGHT[accent] ?? 'bg-muted')}>
+          <Icon className={cn('h-4 w-4', ACCENT_TEXT[accent] ?? 'text-muted-foreground')} />
         </div>
       </CardHeader>
       <CardContent>

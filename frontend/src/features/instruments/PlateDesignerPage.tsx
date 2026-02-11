@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { usePlates, useCreatePlate, useRuns, useQCTemplates } from '@/api/instruments'
 import { useAuth } from '@/hooks/useAuth'
@@ -120,9 +120,8 @@ function PlatePreviewCard({ plate, onClick }: { plate: Plate; onClick: () => voi
 
             {/* Rows */}
             {rowLabels.map((letter, ri) => (
-              <>
+              <Fragment key={`row-${ri}`}>
                 <div
-                  key={`row-${ri}`}
                   className="flex items-center justify-center text-[8px] font-bold text-muted-foreground"
                 >
                   {letter}
@@ -137,7 +136,7 @@ function PlatePreviewCard({ plate, onClick }: { plate: Plate; onClick: () => voi
                     )}
                   />
                 ))}
-              </>
+              </Fragment>
             ))}
           </div>
 

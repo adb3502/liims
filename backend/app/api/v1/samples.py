@@ -58,7 +58,7 @@ async def list_samples(
     sample_status: SampleStatus | None = None,
     wave: int | None = None,
     sort: str = "created_at",
-    order: str = "desc",
+    order: str = Query("desc", pattern="^(asc|desc)$"),
 ):
     """List samples with pagination, fuzzy search, and filters."""
     svc = SampleService(db)

@@ -40,7 +40,7 @@ const navigation: NavItem[] = [
       {
         label: 'Create',
         path: '/participants/create',
-        roles: ['super_admin', 'lab_manager'],
+        roles: ['super_admin', 'lab_manager', 'data_entry', 'field_coordinator'],
       },
       { label: 'ODK Sync', path: '/participants/odk-sync' },
     ],

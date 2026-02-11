@@ -111,9 +111,9 @@ export function useImportHistory(params: { partner_name?: PartnerName; page?: nu
   })
 }
 
-export function useImportDetail(id: string) {
+export function useImportDetail(id: string | undefined) {
   return useQuery({
-    queryKey: importKeys.detail(id),
+    queryKey: importKeys.detail(id ?? ''),
     queryFn: async () => {
       const res = await api.get<SingleResponse<PartnerLabImport & { results: PartnerLabResult[] }>>(`/partner/imports/${id}`)
       return res.data.data

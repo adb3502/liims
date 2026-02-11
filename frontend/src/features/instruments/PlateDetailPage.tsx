@@ -70,7 +70,7 @@ export function PlateDetailPage() {
   const navigate = useNavigate()
   const { hasRole } = useAuth()
 
-  const { data: plate, isLoading, isError } = usePlateDetail(id!)
+  const { data: plate, isLoading, isError } = usePlateDetail(id ?? '')
 
   const [selectedWell, setSelectedWell] = useState<string | null>(null)
   const [showAssignDialog, setShowAssignDialog] = useState(false)
@@ -333,7 +333,7 @@ export function PlateDetailPage() {
         <AssignWellsDialog
           open={showAssignDialog}
           onClose={() => setShowAssignDialog(false)}
-          plateId={id!}
+          plateId={id ?? ''}
         />
       )}
     </div>

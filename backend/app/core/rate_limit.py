@@ -140,7 +140,9 @@ class RateLimiter:
     def _get_ip(request: Request) -> str:
         forwarded = request.headers.get("X-Forwarded-For")
         if forwarded:
-            return forwarded.split(",")[0].strip()
+            # Use the rightmost (last) IP, which is set by the trusted reverse proxy.
+            # The leftmost IP is client-supplied and can be spoofed.
+            return forwarded.split(",")[-1].strip()
         if request.client:
             return request.client.host
         return "unknown"
