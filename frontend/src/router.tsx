@@ -33,6 +33,7 @@ import { InventoryDashboardPage } from '@/features/reports/InventoryDashboardPag
 import { QualityDashboardPage } from '@/features/reports/QualityDashboardPage'
 import { QueryBuilderPage } from '@/features/reports/QueryBuilderPage'
 import { ReportGeneratorPage } from '@/features/reports/ReportGeneratorPage'
+import { FileManagerPage } from '@/features/files/FileManagerPage'
 import { PageSpinner } from '@/components/ui/spinner'
 import type { UserRole } from '@/types'
 
@@ -254,6 +255,7 @@ export const routes: RouteObject[] = [
           { path: 'access-logs', element: <PlaceholderPage title="Access Logs" /> },
           { path: 'reports', element: <PlaceholderPage title="Scheduled Reports" /> },
           { path: 'settings', element: <PlaceholderPage title="System Settings" /> },
+          { path: 'files', element: <FileManagerPage /> },
         ],
       },
 

@@ -271,3 +271,14 @@ class DashboardType(str, enum.Enum):
     SITES = "sites"
     DATA_AVAILABILITY = "data_availability"
     QUALITY = "quality"
+
+
+# --- File Store Enums ---
+
+class FileCategory(str, enum.Enum):
+    INSTRUMENT_OUTPUT = "instrument_output"
+    PARTNER_DATA = "partner_data"
+    ICC_IMAGE = "icc_image"
+    REPORT = "report"
+    OMICS_DATA = "omics_data"
+    OTHER = "other"

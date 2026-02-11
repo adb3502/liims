@@ -43,6 +43,8 @@ class Settings(BaseSettings):
 
     # NAS / File Storage
     NAS_MOUNT_PATH: str = "/data/nas"
+    FILE_STORE_PATH: str = "/data/file_store"
+    FILE_STORE_MAX_SIZE_MB: int = 100
 
     # Celery
     CELERY_BROKER_URL: str = "redis://redis:6379/0"

@@ -59,5 +59,8 @@ from app.models.omics import IccProcessing, OmicsResult, OmicsResultSet  # noqa:
 # Notifications
 from app.models.notification import Notification  # noqa: F401
 
+# File Store
+from app.models.file_store import ManagedFile, WatchDirectory  # noqa: F401
+
 # System
 from app.models.system import DashboardCache, ScheduledReport, SystemSetting  # noqa: F401

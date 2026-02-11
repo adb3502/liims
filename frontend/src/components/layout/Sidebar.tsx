@@ -14,6 +14,7 @@ import {
   Shield,
   ChevronLeft,
   ChevronRight,
+  FileBox,
 } from 'lucide-react'
 
 interface NavItem {
@@ -129,6 +130,7 @@ const navigation: NavItem[] = [
       { label: 'Read Replica', path: '/admin/replica' },
       { label: 'Audit Logs', path: '/admin/audit-logs' },
       { label: 'Access Logs', path: '/admin/access-logs' },
+      { label: 'File Manager', path: '/admin/files' },
       { label: 'Scheduled Reports', path: '/admin/reports' },
       { label: 'System Settings', path: '/admin/settings' },
     ],
