@@ -105,6 +105,48 @@ async def create_sample(
     }
 
 
+# C-04: Discard-request routes MUST come before /{sample_id} to avoid
+# FastAPI matching "discard-requests" as a UUID path parameter.
+
+@router.get("/discard-requests", response_model=dict)
+async def list_discard_requests(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_role(
+        UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER,
+    ))],
+    request_status: DiscardRequestStatus | None = None,
+):
+    """List discard requests (lab manager+ only)."""
+    svc = SampleService(db)
+    requests = await svc.list_discard_requests(status=request_status)
+    return {
+        "success": True,
+        "data": [DiscardRequestRead.model_validate(r).model_dump(mode="json") for r in requests],
+    }
+
+
+@router.post("/discard-requests/{request_id}/approve", response_model=dict)
+async def approve_discard(
+    request_id: uuid.UUID,
+    data: DiscardApprovalRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_role(
+        UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER,
+    ))],
+):
+    """Approve or reject a discard request."""
+    svc = SampleService(db)
+    req = await svc.approve_discard(
+        request_id, data.approved, current_user.id, data.rejection_reason,
+    )
+    if req is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Discard request not found.")
+    return {
+        "success": True,
+        "data": DiscardRequestRead.model_validate(req).model_dump(mode="json"),
+    }
+
+
 @router.get("/{sample_id}", response_model=dict)
 async def get_sample(
     sample_id: uuid.UUID,
@@ -249,45 +291,6 @@ async def request_discard(
     if sample is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Sample not found.")
     req = await svc.create_discard_request(sample_id, data, requested_by=current_user.id)
-    return {
-        "success": True,
-        "data": DiscardRequestRead.model_validate(req).model_dump(mode="json"),
-    }
-
-
-@router.get("/discard-requests", response_model=dict)
-async def list_discard_requests(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_role(
-        UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER,
-    ))],
-    request_status: DiscardRequestStatus | None = None,
-):
-    """List discard requests (lab manager+ only)."""
-    svc = SampleService(db)
-    requests = await svc.list_discard_requests(status=request_status)
-    return {
-        "success": True,
-        "data": [DiscardRequestRead.model_validate(r).model_dump(mode="json") for r in requests],
-    }
-
-
-@router.post("/discard-requests/{request_id}/approve", response_model=dict)
-async def approve_discard(
-    request_id: uuid.UUID,
-    data: DiscardApprovalRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_role(
-        UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER,
-    ))],
-):
-    """Approve or reject a discard request."""
-    svc = SampleService(db)
-    req = await svc.approve_discard(
-        request_id, data.approved, current_user.id, data.rejection_reason,
-    )
-    if req is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Discard request not found.")
     return {
         "success": True,
         "data": DiscardRequestRead.model_validate(req).model_dump(mode="json"),

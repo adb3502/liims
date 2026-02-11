@@ -1,5 +1,6 @@
 """SMTP email client wrapper."""
 
+import html
 import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -55,15 +56,18 @@ def render_notification_email(title: str, message: str, severity: str) -> str:
     }
     color = severity_colors.get(severity, "#2563eb")
 
+    safe_title = html.escape(title)
+    safe_message = html.escape(message)
+
     return f"""
     <html>
     <body style="font-family: Inter, Arial, sans-serif; margin: 0; padding: 20px; background: #f8fafc;">
         <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <div style="background: {color}; padding: 16px 24px;">
-                <h2 style="color: white; margin: 0; font-size: 18px;">LIIMS Alert: {title}</h2>
+                <h2 style="color: white; margin: 0; font-size: 18px;">LIIMS Alert: {safe_title}</h2>
             </div>
             <div style="padding: 24px;">
-                <p style="color: #334155; line-height: 1.6; margin: 0 0 16px 0;">{message}</p>
+                <p style="color: #334155; line-height: 1.6; margin: 0 0 16px 0;">{safe_message}</p>
                 <p style="color: #94a3b8; font-size: 12px; margin: 16px 0 0 0;">
                     This is an automated notification from LIIMS. Do not reply to this email.
                 </p>

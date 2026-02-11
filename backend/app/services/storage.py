@@ -596,6 +596,109 @@ class StorageService:
 
         return await self.assign_sample(position.id, sample_id, assigned_by)
 
+    async def bulk_assign_positions(
+        self,
+        assignments: list[BulkAssignItem],
+        assigned_by: uuid.UUID,
+    ) -> list[StoragePosition]:
+        """Batch-assign multiple samples to positions."""
+        results = []
+        for item in assignments:
+            position = await self.assign_sample(
+                item.position_id, item.sample_id, assigned_by,
+            )
+            results.append(position)
+        return results
+
+    async def consolidate_box(
+        self,
+        source_box_id: uuid.UUID,
+        target_box_id: uuid.UUID,
+        consolidated_by: uuid.UUID,
+    ) -> dict:
+        """Move all samples from source box to target box (-80 to -150 consolidation).
+
+        Iterates occupied positions in source, finds available positions in target,
+        and reassigns each sample.
+        """
+        # Validate source box
+        source_result = await self.db.execute(
+            select(StorageBox).where(
+                StorageBox.id == source_box_id,
+                StorageBox.is_deleted == False,  # noqa: E712
+            )
+        )
+        source_box = source_result.scalar_one_or_none()
+        if source_box is None:
+            raise ValueError("Source box not found.")
+
+        # Validate target box
+        target_result = await self.db.execute(
+            select(StorageBox).where(
+                StorageBox.id == target_box_id,
+                StorageBox.is_deleted == False,  # noqa: E712
+            )
+        )
+        target_box = target_result.scalar_one_or_none()
+        if target_box is None:
+            raise ValueError("Target box not found.")
+
+        # Get occupied positions from source
+        src_positions = await self.db.execute(
+            select(StoragePosition)
+            .where(
+                StoragePosition.box_id == source_box_id,
+                StoragePosition.sample_id != None,  # noqa: E711
+            )
+            .order_by(StoragePosition.row.asc(), StoragePosition.column.asc())
+        )
+        occupied = list(src_positions.scalars().all())
+
+        if not occupied:
+            raise ValueError("Source box has no samples to consolidate.")
+
+        # Check target has enough space
+        target_occupied = await self._box_occupied_count(target_box_id)
+        target_total = target_box.rows * target_box.columns
+        available = target_total - target_occupied
+        if available < len(occupied):
+            raise ValueError(
+                f"Target box has {available} available positions but "
+                f"{len(occupied)} samples need to be moved."
+            )
+
+        moved_count = 0
+        for src_pos in occupied:
+            sample_id = src_pos.sample_id
+            # Unassign from source
+            await self.unassign_sample(src_pos.id, consolidated_by)
+            # Find next available in target and assign
+            target_pos = await self.find_available_position(target_box_id)
+            if target_pos is None:
+                raise ValueError("Ran out of target positions during consolidation.")
+            await self.assign_sample(target_pos.id, sample_id, consolidated_by)
+            moved_count += 1
+
+        self.db.add(AuditLog(
+            id=uuid.uuid4(),
+            user_id=consolidated_by,
+            action=AuditAction.UPDATE,
+            entity_type="storage_box",
+            entity_id=source_box_id,
+            new_values={
+                "event": "consolidate",
+                "source_box_id": str(source_box_id),
+                "target_box_id": str(target_box_id),
+                "moved_count": moved_count,
+            },
+        ))
+
+        return {
+            "source_box_id": source_box_id,
+            "target_box_id": target_box_id,
+            "moved_count": moved_count,
+        }
+
     # ── Temperature events ────────────────────────────────────────────
 
     async def record_temperature_event(
@@ -673,6 +776,50 @@ class StorageService:
             .limit(1)
         )
         return result.scalar_one_or_none()
+
+    async def resolve_temperature_event(
+        self,
+        event_id: uuid.UUID,
+        data: TempEventResolve,
+        resolved_by: uuid.UUID,
+    ) -> FreezerTemperatureEvent | None:
+        """Add resolution notes and optionally close a temperature event."""
+        result = await self.db.execute(
+            select(FreezerTemperatureEvent).where(
+                FreezerTemperatureEvent.id == event_id
+            )
+        )
+        event = result.scalar_one_or_none()
+        if event is None:
+            return None
+
+        old_values = {}
+        new_values = {}
+
+        if data.event_end is not None and event.event_end != data.event_end:
+            old_values["event_end"] = str(event.event_end) if event.event_end else None
+            event.event_end = data.event_end
+            new_values["event_end"] = str(data.event_end)
+
+        old_values["resolution_notes"] = event.resolution_notes
+        event.resolution_notes = data.resolution_notes
+        new_values["resolution_notes"] = data.resolution_notes
+
+        if data.requires_sample_review is not None:
+            old_values["requires_sample_review"] = str(event.requires_sample_review)
+            event.requires_sample_review = data.requires_sample_review
+            new_values["requires_sample_review"] = str(data.requires_sample_review)
+
+        self.db.add(AuditLog(
+            id=uuid.uuid4(),
+            user_id=resolved_by,
+            action=AuditAction.UPDATE,
+            entity_type="freezer_temperature_event",
+            entity_id=event.id,
+            old_values=old_values,
+            new_values=new_values,
+        ))
+        return event
 
     # ── Search ────────────────────────────────────────────────────────
 
@@ -801,6 +948,55 @@ class StorageService:
             "created_at": box.created_at,
             "updated_at": box.updated_at,
         }
+
+    async def _check_capacity_warning(
+        self, box_id: uuid.UUID, triggered_by: uuid.UUID
+    ) -> None:
+        """Check if the freezer containing this box has crossed the 85% threshold."""
+        try:
+            # Walk up: box -> rack -> freezer
+            box_result = await self.db.execute(
+                select(StorageBox.rack_id).where(StorageBox.id == box_id)
+            )
+            rack_id = box_result.scalar_one_or_none()
+            if rack_id is None:
+                return
+
+            rack_result = await self.db.execute(
+                select(StorageRack.freezer_id).where(StorageRack.id == rack_id)
+            )
+            freezer_id = rack_result.scalar_one_or_none()
+            if freezer_id is None:
+                return
+
+            stats = await self._freezer_utilization(freezer_id)
+            utilization = stats["utilization_pct"] / 100.0
+            if utilization < CAPACITY_WARNING_THRESHOLD:
+                return
+
+            from app.services.notification import NotificationService
+            notif_svc = NotificationService(self.db)
+
+            f_result = await self.db.execute(
+                select(Freezer.name).where(Freezer.id == freezer_id)
+            )
+            freezer_name = f_result.scalar_one_or_none() or "Unknown"
+
+            pct = stats["utilization_pct"]
+            await notif_svc.notify_role(
+                role=UserRole.LAB_MANAGER,
+                notification_type=NotificationType.FREEZER_CAPACITY_WARNING,
+                severity=NotificationSeverity.WARNING,
+                title=f"Freezer capacity warning: {freezer_name}",
+                message=(
+                    f"Freezer '{freezer_name}' is at {pct}% capacity "
+                    f"({stats['used_positions']}/{stats['total_positions']} positions)."
+                ),
+                entity_type="freezer",
+                entity_id=freezer_id,
+            )
+        except Exception:
+            logger.exception("Failed to check capacity warning")
 
     async def _notify_temperature_event(
         self,

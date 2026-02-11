@@ -6,6 +6,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.collection_sites import router as sites_router
 from app.api.v1.labels import router as labels_router
 from app.api.v1.notifications import router as notifications_router
+from app.api.v1.qr import router as qr_router
 from app.api.v1.participants import router as participants_router
 from app.api.v1.samples import router as samples_router
 from app.api.v1.settings import router as settings_router
@@ -24,3 +25,4 @@ api_router.include_router(notifications_router)
 api_router.include_router(settings_router)
 api_router.include_router(storage_router)
 api_router.include_router(labels_router)
+api_router.include_router(qr_router)

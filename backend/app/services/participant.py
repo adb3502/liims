@@ -103,6 +103,12 @@ class ParticipantService:
             Participant.is_deleted == False  # noqa: E712
         )
 
+        # C-06: Sort column allowlist
+        ALLOWED_SORTS = {
+            "created_at", "participant_code", "enrollment_date",
+            "age_group", "sex", "completion_pct",
+        }
+
         if search:
             # Use pg_trgm similarity for fuzzy search
             query = query.where(
@@ -113,8 +119,9 @@ class ParticipantService:
                 text("similarity(participant.participant_code, :search) DESC")
             ).params(search=search)
         else:
-            # Standard ordering
-            sort_col = getattr(Participant, sort, Participant.created_at)
+            # Standard ordering with validated sort column
+            safe_sort = sort if sort in ALLOWED_SORTS else "created_at"
+            sort_col = getattr(Participant, safe_sort, Participant.created_at)
             if order == "asc":
                 query = query.order_by(sort_col.asc())
             else:

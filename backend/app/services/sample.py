@@ -225,6 +225,12 @@ class SampleService:
     ) -> tuple[list[Sample], int]:
         query = select(Sample).where(Sample.is_deleted == False)  # noqa: E712
 
+        # C-06: Sort column allowlist
+        ALLOWED_SORTS = {
+            "created_at", "sample_code", "collection_datetime",
+            "status", "sample_type", "wave",
+        }
+
         if search:
             query = query.where(
                 text("similarity(sample.sample_code, :search) > 0.1")
@@ -233,7 +239,8 @@ class SampleService:
                 text("similarity(sample.sample_code, :search) DESC")
             ).params(search=search)
         else:
-            sort_col = getattr(Sample, sort, Sample.created_at)
+            safe_sort = sort if sort in ALLOWED_SORTS else "created_at"
+            sort_col = getattr(Sample, safe_sort, Sample.created_at)
             if order == "asc":
                 query = query.order_by(sort_col.asc())
             else:

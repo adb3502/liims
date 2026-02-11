@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import decode_access_token, hash_token
 from app.database import get_db
 from app.models.enums import UserRole
-from app.models.user import User
+from app.models.user import User, UserSession
 
 security_scheme = HTTPBearer(auto_error=False)
 
@@ -44,6 +44,20 @@ async def get_current_user(
         )
 
     user_id = uuid.UUID(payload["sub"])
+
+    # C-03: Verify session has not been revoked
+    token_hash = hash_token(token)
+    session_result = await db.execute(
+        select(UserSession.id).where(
+            UserSession.token_hash == token_hash,
+            UserSession.is_active == True,  # noqa: E712
+        )
+    )
+    if session_result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session has been revoked. Please log in again.",
+        )
 
     # Check user exists and is active
     result = await db.execute(

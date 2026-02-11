@@ -63,10 +63,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       return
     }
     try {
-      const response = await api.get<{ success: true; data: { user: User } }>('/auth/me')
+      const response = await api.get<{ success: true; data: User }>('/auth/me')
       startTokenRefreshTimer()
       set({
-        user: response.data.data.user,
+        user: response.data.data,
         isAuthenticated: true,
         isLoading: false,
       })

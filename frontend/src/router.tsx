@@ -10,6 +10,10 @@ import { ParticipantForm } from '@/features/participants/ParticipantForm'
 import { SampleListPage } from '@/features/samples/SampleListPage'
 import { SampleDetailPage } from '@/features/samples/SampleDetailPage'
 import { SampleRegisterForm } from '@/features/samples/SampleRegisterForm'
+import { FreezerListPage } from '@/features/storage/FreezerListPage'
+import { FreezerDetailPage } from '@/features/storage/FreezerDetailPage'
+import { BoxDetailPage } from '@/features/storage/BoxDetailPage'
+import { StorageSearchPage } from '@/features/storage/StorageSearchPage'
 import { PageSpinner } from '@/components/ui/spinner'
 import type { UserRole } from '@/types'
 
@@ -143,11 +147,11 @@ export const routes: RouteObject[] = [
       {
         path: 'storage',
         children: [
-          { path: 'freezers', element: <PlaceholderPage title="Freezers" /> },
-          { path: 'freezers/:id', element: <PlaceholderPage title="Freezer Detail" /> },
-          { path: 'boxes', element: <PlaceholderPage title="Storage Boxes" /> },
-          { path: 'boxes/:id', element: <PlaceholderPage title="Box Detail" /> },
-          { path: 'search', element: <PlaceholderPage title="Storage Search" /> },
+          { path: 'freezers', element: <FreezerListPage /> },
+          { path: 'freezers/:id', element: <FreezerDetailPage /> },
+          { path: 'boxes', element: <Navigate to="/storage/freezers" replace /> },
+          { path: 'boxes/:id', element: <BoxDetailPage /> },
+          { path: 'search', element: <StorageSearchPage /> },
         ],
       },
 

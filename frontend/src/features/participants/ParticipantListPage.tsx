@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useParticipants, useCollectionSites } from '@/api/participants'
 import { useAuth } from '@/hooks/useAuth'
@@ -29,7 +29,7 @@ const PER_PAGE = 25
 
 function useDebounce(value: string, delay: number): string {
   const [debounced, setDebounced] = useState(value)
-  useMemo(() => {
+  useEffect(() => {
     const timer = setTimeout(() => setDebounced(value), delay)
     return () => clearTimeout(timer)
   }, [value, delay])

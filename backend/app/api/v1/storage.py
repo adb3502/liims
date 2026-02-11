@@ -18,6 +18,8 @@ from app.schemas.storage import (
     BoxDetail,
     BoxRead,
     BoxUpdate,
+    BulkAssignRequest,
+    ConsolidateRequest,
     FreezerCreate,
     FreezerRead,
     FreezerUpdate,
@@ -29,6 +31,7 @@ from app.schemas.storage import (
     StorageSearchResult,
     TempEventCreate,
     TempEventRead,
+    TempEventResolve,
 )
 from app.services.storage import StorageService
 
@@ -341,6 +344,45 @@ async def auto_assign(
     }
 
 
+@router.post("/bulk-assign", response_model=dict)
+async def bulk_assign(
+    data: BulkAssignRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_role(*WRITE_ROLES))],
+):
+    """Batch-assign multiple samples to positions."""
+    svc = StorageService(db)
+    try:
+        positions = await svc.bulk_assign_positions(
+            data.assignments, assigned_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    return {
+        "success": True,
+        "data": [PositionRead.model_validate(p).model_dump(mode="json") for p in positions],
+        "meta": {"count": len(positions)},
+    }
+
+
+@router.post("/boxes/{box_id}/consolidate", response_model=dict)
+async def consolidate_box(
+    box_id: uuid.UUID,
+    data: ConsolidateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_role(*ADMIN_ROLES))],
+):
+    """Consolidate samples from source box into target box (e.g. -80 to -150)."""
+    svc = StorageService(db)
+    try:
+        result = await svc.consolidate_box(
+            box_id, data.target_box_id, consolidated_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    return {"success": True, "data": result}
+
+
 # ── Temperature Events ────────────────────────────────────────────────
 
 @router.get("/freezers/{freezer_id}/temperature", response_model=dict)
@@ -383,6 +425,26 @@ async def record_temperature_event(
     event = await svc.record_temperature_event(
         freezer_id, data, reported_by=current_user.id,
     )
+    return {
+        "success": True,
+        "data": TempEventRead.model_validate(event).model_dump(mode="json"),
+    }
+
+
+@router.put("/temperature-events/{event_id}/resolve", response_model=dict)
+async def resolve_temperature_event(
+    event_id: uuid.UUID,
+    data: TempEventResolve,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_role(*ADMIN_ROLES))],
+):
+    """Add resolution notes to a temperature event."""
+    svc = StorageService(db)
+    event = await svc.resolve_temperature_event(
+        event_id, data, resolved_by=current_user.id,
+    )
+    if event is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Temperature event not found.")
     return {
         "success": True,
         "data": TempEventRead.model_validate(event).model_dump(mode="json"),

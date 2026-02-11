@@ -350,6 +350,24 @@ export const DISCARD_REASON_LABELS: Record<DiscardReason, string> = {
 
 // --- Storage ---
 
+export type BoxMaterial = 'cardboard_cryo' | 'abdos_plastic' | 'slide_box'
+
+export type FreezerEventType = 'excursion' | 'failure' | 'maintenance' | 'recovery'
+
+export const FREEZER_EVENT_TYPE_LABELS: Record<FreezerEventType, string> = {
+  excursion: 'Temperature Excursion',
+  failure: 'Freezer Failure',
+  maintenance: 'Maintenance',
+  recovery: 'Recovery',
+}
+
+export const BOX_TYPE_LABELS: Record<BoxType, string> = {
+  cryo_81: 'Cryo 81',
+  cryo_100: 'Cryo 100',
+  abdos_81: 'Abdos 81',
+  custom: 'Custom',
+}
+
 export interface Freezer {
   id: string
   name: string
@@ -360,7 +378,37 @@ export interface Freezer {
   slots_per_rack: number | null
   is_active: boolean
   notes: string | null
+  created_by: string | null
   created_at: string
+  updated_at: string
+  used_positions: number
+  total_positions: number
+  utilization_pct: number
+}
+
+export interface FreezerCreate {
+  name: string
+  freezer_type: FreezerType
+  location?: string
+  rack_count?: number
+  slots_per_rack?: number
+  notes?: string
+}
+
+export interface StorageRack {
+  id: string
+  freezer_id: string
+  rack_name: string
+  position_in_freezer: number | null
+  capacity: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface RackCreate {
+  rack_name: string
+  position_in_freezer?: number
+  capacity?: number
 }
 
 export interface StorageBox {
@@ -371,9 +419,28 @@ export interface StorageBox {
   rows: number
   columns: number
   box_type: BoxType
+  box_material: BoxMaterial | null
   position_in_rack: number | null
   group_code: string | null
+  collection_site_id: string | null
+  created_by: string | null
   created_at: string
+  updated_at: string
+  occupied_count: number
+  total_slots: number
+}
+
+export interface BoxCreate {
+  rack_id: string
+  box_name: string
+  box_label?: string
+  rows?: number
+  columns?: number
+  box_type?: BoxType
+  box_material?: BoxMaterial
+  position_in_rack?: number
+  group_code?: string
+  collection_site_id?: string
 }
 
 export interface StoragePosition {
@@ -385,6 +452,39 @@ export interface StoragePosition {
   occupied_at: string | null
   locked_by: string | null
   locked_at: string | null
+  sample_code: string | null
+}
+
+export interface BoxDetail extends StorageBox {
+  positions: StoragePosition[]
+}
+
+export interface TempEvent {
+  id: string
+  freezer_id: string
+  event_type: FreezerEventType
+  event_start: string
+  event_end: string | null
+  observed_temp_c: number | null
+  reported_by: string
+  samples_affected_count: number | null
+  resolution_notes: string | null
+  requires_sample_review: boolean
+  created_at: string
+}
+
+export interface StorageSearchResult {
+  sample_id: string
+  sample_code: string
+  position_id: string
+  row: number
+  column: number
+  box_id: string
+  box_name: string
+  rack_id: string
+  rack_name: string
+  freezer_id: string
+  freezer_name: string
 }
 
 // --- Notification ---

@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     BCRYPT_ROUNDS: int = 12
 
+    # CORS
+    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8080"]
+
     # Session
     SESSION_TIMEOUT_MINUTES: int = 30
     MAX_CONCURRENT_SESSIONS: int = 3
