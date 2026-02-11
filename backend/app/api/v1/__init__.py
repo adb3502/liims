@@ -15,6 +15,8 @@ from app.api.v1.settings import router as settings_router
 from app.api.v1.storage import router as storage_router
 from app.api.v1.transports import router as transports_router
 from app.api.v1.users import router as users_router
+from app.api.v1.instruments import router as instruments_router
+from app.api.v1.icc import router as icc_router
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth_router)
@@ -30,3 +32,5 @@ api_router.include_router(labels_router)
 api_router.include_router(qr_router)
 api_router.include_router(field_events_router)
 api_router.include_router(partner_router)
+api_router.include_router(instruments_router)
+api_router.include_router(icc_router)

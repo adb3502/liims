@@ -747,3 +747,190 @@ export interface StoolKit {
   created_at: string
   updated_at: string
 }
+
+// --- Instruments & Runs ---
+
+export type InstrumentType = 'liquid_handler' | 'mass_spec' | 'other'
+export type RunType = 'proteomics' | 'metabolomics' | 'plate_prep' | 'other'
+export type RunStatus = 'planned' | 'in_progress' | 'completed' | 'failed'
+export type QCStatus = 'pending' | 'passed' | 'failed'
+export type OmicsResultType = 'proteomics' | 'metabolomics'
+export type IccStatus =
+  | 'received'
+  | 'fixation'
+  | 'permeabilization'
+  | 'blocking'
+  | 'primary_antibody'
+  | 'secondary_antibody'
+  | 'dapi_staining'
+  | 'mounted'
+  | 'imaging'
+  | 'analysis_complete'
+
+export const INSTRUMENT_TYPE_LABELS: Record<InstrumentType, string> = {
+  liquid_handler: 'Liquid Handler',
+  mass_spec: 'Mass Spectrometer',
+  other: 'Other',
+}
+
+export const RUN_TYPE_LABELS: Record<RunType, string> = {
+  proteomics: 'Proteomics',
+  metabolomics: 'Metabolomics',
+  plate_prep: 'Plate Prep',
+  other: 'Other',
+}
+
+export const RUN_STATUS_LABELS: Record<RunStatus, string> = {
+  planned: 'Planned',
+  in_progress: 'In Progress',
+  completed: 'Completed',
+  failed: 'Failed',
+}
+
+export const QC_STATUS_LABELS: Record<QCStatus, string> = {
+  pending: 'Pending',
+  passed: 'Passed',
+  failed: 'Failed',
+}
+
+export const ICC_STATUS_LABELS: Record<IccStatus, string> = {
+  received: 'Received',
+  fixation: 'Fixation',
+  permeabilization: 'Permeabilization',
+  blocking: 'Blocking',
+  primary_antibody: 'Primary Antibody',
+  secondary_antibody: 'Secondary Antibody',
+  dapi_staining: 'DAPI Staining',
+  mounted: 'Mounted',
+  imaging: 'Imaging',
+  analysis_complete: 'Analysis Complete',
+}
+
+export interface Instrument {
+  id: string
+  name: string
+  instrument_type: InstrumentType
+  manufacturer: string | null
+  model: string | null
+  software: string | null
+  location: string | null
+  watch_directory: string | null
+  is_active: boolean
+  configuration: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+}
+
+export interface InstrumentCreate {
+  name: string
+  instrument_type: InstrumentType
+  manufacturer?: string
+  model?: string
+  software?: string
+  location?: string
+  watch_directory?: string
+  configuration?: Record<string, unknown>
+}
+
+export interface QCTemplate {
+  id: string
+  name: string
+  description: string | null
+  template_data: Record<string, unknown>
+  run_type: RunType | null
+  is_active: boolean
+  created_at: string
+}
+
+export interface Plate {
+  id: string
+  plate_name: string
+  run_id: string | null
+  qc_template_id: string | null
+  rows: number
+  columns: number
+  randomization_config: Record<string, unknown> | null
+  created_at: string
+  created_by: string | null
+}
+
+export interface PlateWell {
+  id: string
+  run_id: string
+  sample_id: string
+  plate_id: string | null
+  well_position: string | null
+  plate_number: number
+  sample_order: number | null
+  is_qc_sample: boolean
+  qc_type: string | null
+  injection_volume_ul: number | null
+  volume_withdrawn_ul: number | null
+  created_at: string
+  sample_code?: string
+}
+
+export interface PlateDetail extends Plate {
+  wells: PlateWell[]
+}
+
+export interface InstrumentRun {
+  id: string
+  instrument_id: string
+  run_name: string | null
+  run_type: RunType | null
+  status: RunStatus
+  started_at: string | null
+  completed_at: string | null
+  operator_id: string | null
+  method_name: string | null
+  batch_id: string | null
+  notes: string | null
+  raw_data_path: string | null
+  raw_data_size_bytes: number | null
+  raw_data_verified: boolean
+  qc_status: QCStatus | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  instrument_name?: string
+  sample_count?: number
+}
+
+export interface InstrumentRunCreate {
+  instrument_id: string
+  run_name?: string
+  run_type?: RunType
+  method_name?: string
+  batch_id?: string
+  notes?: string
+}
+
+export interface RunDetail extends InstrumentRun {
+  plates: Plate[]
+  run_samples: PlateWell[]
+}
+
+export interface IccSlide {
+  id: string
+  sample_id: string
+  slide_label: string | null
+  status: IccStatus
+  stain_panel: string | null
+  fixation_datetime: string | null
+  imaging_datetime: string | null
+  operator_id: string | null
+  notes: string | null
+  image_paths: string[] | null
+  cell_counts: Record<string, number> | null
+  created_at: string
+  updated_at: string
+  sample_code?: string
+}
+
+export interface IccSlideCreate {
+  sample_id: string
+  slide_label?: string
+  stain_panel?: string
+  notes?: string
+}

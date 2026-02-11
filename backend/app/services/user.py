@@ -77,7 +77,13 @@ class UserService:
         if is_active is not None:
             query = query.where(User.is_active == is_active)
         if search:
-            pattern = f"%{search}%"
+            safe = (
+                search
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_")
+            )
+            pattern = f"%{safe}%"
             query = query.where(
                 User.full_name.ilike(pattern) | User.email.ilike(pattern)
             )

@@ -186,9 +186,12 @@ async def upload_csv(
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only CSV files are accepted.")
 
+    MAX_CSV_SIZE = 10 * 1024 * 1024  # 10 MB
     content = await file.read()
     if len(content) == 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "File is empty.")
+    if len(content) > MAX_CSV_SIZE:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "CSV file exceeds 10 MB limit.")
 
     svc = PartnerImportService(db)
     record = await svc.upload_csv(

@@ -139,10 +139,10 @@ export function useUploadCsv() {
     mutationFn: async ({ file, partner_name }: { file: File; partner_name: PartnerName }) => {
       const formData = new FormData()
       formData.append('file', file)
-      formData.append('partner_name', partner_name)
-      const res = await api.post('/partner/imports/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
+      const res = await api.post(
+        `/partner/imports/upload?partner_name=${encodeURIComponent(partner_name)}`,
+        formData,
+      )
       return res.data.data
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: importKeys.lists() }),

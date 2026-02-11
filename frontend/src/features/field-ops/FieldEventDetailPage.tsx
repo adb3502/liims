@@ -106,7 +106,10 @@ export function FieldEventDetailPage() {
     try {
       await checkInMutation.mutateAsync({
         participantId: participant.participant_id,
-        data: { [field]: !participant[field] },
+        data: {
+          wrist_tag_issued: field === 'wrist_tag_issued' ? !participant.wrist_tag_issued : participant.wrist_tag_issued,
+          consent_verified: field === 'consent_verified' ? !participant.consent_verified : participant.consent_verified,
+        },
       })
     } catch {
       // handled by mutation

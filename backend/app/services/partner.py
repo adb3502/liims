@@ -243,11 +243,7 @@ class CanonicalTestService:
         if category:
             query = query.where(CanonicalTest.category == category)
 
-        count_q = select(func.count()).select_from(
-            select(CanonicalTest.id).where(
-                CanonicalTest.category == category if category else True
-            ).subquery()
-        )
+        count_q = select(func.count()).select_from(query.subquery())
         total = (await self.db.execute(count_q)).scalar_one()
 
         query = query.offset((page - 1) * per_page).limit(per_page)
@@ -439,35 +435,47 @@ class PartnerImportService:
         preview_rows: list[ImportPreviewRow] = []
         matched_count = 0
         total_rows = len(rows)
+        preview_slice = rows[:20]
 
-        # Only preview first 20 rows
-        for idx, row in enumerate(rows[:20]):
+        # Batch: collect unique participant codes from preview rows
+        unique_codes = set()
+        for row in preview_slice:
+            code = row.get("participant_code", row.get("participant_id", "")).strip()
+            if code:
+                unique_codes.add(code)
+
+        # Single batch query for all unique participant codes using pg_trgm
+        code_to_participant: dict[str, uuid.UUID] = {}
+        if unique_codes:
+            for code in unique_codes:
+                p_result = await self.db.execute(
+                    select(Participant.id, Participant.participant_code)
+                    .where(
+                        Participant.is_deleted == False,  # noqa: E712
+                        text("similarity(participant.participant_code, :code) > 0.6"),
+                    )
+                    .params(code=code)
+                    .order_by(text("similarity(participant.participant_code, :code) DESC"))
+                    .limit(1)
+                )
+                row_result = p_result.one_or_none()
+                if row_result:
+                    code_to_participant[code] = row_result[0]
+
+        for idx, row in enumerate(preview_slice):
             participant_code_raw = row.get("participant_code", row.get("participant_id", "")).strip()
             test_name_raw = row.get("test_name", row.get("test", "")).strip()
             test_value = row.get("value", row.get("test_value", "")).strip() or None
             issues: list[str] = []
 
-            # Try to match participant by code using pg_trgm
             matched_participant_id = None
             if participant_code_raw:
-                p_result = await self.db.execute(
-                    select(Participant.id)
-                    .where(
-                        Participant.is_deleted == False,  # noqa: E712
-                        text("similarity(participant.participant_code, :code) > 0.6"),
-                    )
-                    .params(code=participant_code_raw)
-                    .order_by(text("similarity(participant.participant_code, :code) DESC"))
-                    .params(code=participant_code_raw)
-                    .limit(1)
-                )
-                matched_participant_id = p_result.scalar_one_or_none()
+                matched_participant_id = code_to_participant.get(participant_code_raw)
                 if matched_participant_id is None:
                     issues.append("Participant not matched")
             else:
                 issues.append("Missing participant code")
 
-            # Try to match test name via aliases
             matched_test_id = None
             if test_name_raw:
                 alias = aliases.get(test_name_raw.lower())
@@ -494,7 +502,7 @@ class PartnerImportService:
         return ImportPreviewResponse(
             total_rows=total_rows,
             matched_rows=matched_count,
-            unmatched_rows=total_rows - matched_count,
+            unmatched_rows=len(preview_slice) - matched_count,
             preview_rows=preview_rows,
         )
 
@@ -560,6 +568,33 @@ class PartnerImportService:
         records_failed = 0
         records_total = len(rows)
 
+        # Batch: collect unique participant codes and pre-match them all
+        unique_codes: set[str] = set()
+        for row in rows:
+            code = row.get("participant_code", row.get("participant_id", "")).strip()
+            if code:
+                unique_codes.add(code)
+
+        code_to_participant: dict[str, uuid.UUID] = {}
+        # Process in batches of 500 to avoid overwhelming the DB
+        code_list = list(unique_codes)
+        for batch_start in range(0, len(code_list), 500):
+            batch = code_list[batch_start:batch_start + 500]
+            for code in batch:
+                p_result = await self.db.execute(
+                    select(Participant.id)
+                    .where(
+                        Participant.is_deleted == False,  # noqa: E712
+                        text("similarity(participant.participant_code, :code) > 0.6"),
+                    )
+                    .params(code=code)
+                    .order_by(text("similarity(participant.participant_code, :code) DESC"))
+                    .limit(1)
+                )
+                pid = p_result.scalar_one_or_none()
+                if pid:
+                    code_to_participant[code] = pid
+
         for row in rows:
             participant_code_raw = row.get("participant_code", row.get("participant_id", "")).strip()
             test_name_raw = row.get("test_name", row.get("test", "")).strip()
@@ -567,24 +602,9 @@ class PartnerImportService:
             test_unit = row.get("unit", row.get("test_unit", "")).strip() or None
             reference_range = row.get("reference_range", "").strip() or None
 
-            # Match participant
-            matched_participant_id = None
-            match_status = MatchStatus.UNMATCHED
-            if participant_code_raw:
-                p_result = await self.db.execute(
-                    select(Participant.id)
-                    .where(
-                        Participant.is_deleted == False,  # noqa: E712
-                        text("similarity(participant.participant_code, :code) > 0.6"),
-                    )
-                    .params(code=participant_code_raw)
-                    .order_by(text("similarity(participant.participant_code, :code) DESC"))
-                    .params(code=participant_code_raw)
-                    .limit(1)
-                )
-                matched_participant_id = p_result.scalar_one_or_none()
-                if matched_participant_id:
-                    match_status = MatchStatus.AUTO_MATCHED
+            # Match participant from pre-built lookup
+            matched_participant_id = code_to_participant.get(participant_code_raw) if participant_code_raw else None
+            match_status = MatchStatus.AUTO_MATCHED if matched_participant_id else MatchStatus.UNMATCHED
 
             # Match test name
             canonical_test_id = None
@@ -730,7 +750,24 @@ class StoolKitService:
         if kit is None:
             return None
 
+        # Validate status transition
+        VALID_KIT_TRANSITIONS: dict[StoolKitStatus, set[StoolKitStatus]] = {
+            StoolKitStatus.ISSUED: {StoolKitStatus.PICKUP_SCHEDULED},
+            StoolKitStatus.PICKUP_SCHEDULED: {StoolKitStatus.COLLECTED_BY_DECODEAGE},
+            StoolKitStatus.COLLECTED_BY_DECODEAGE: {StoolKitStatus.PROCESSING},
+            StoolKitStatus.PROCESSING: {StoolKitStatus.RESULTS_RECEIVED},
+            StoolKitStatus.RESULTS_RECEIVED: set(),
+        }
+        allowed = VALID_KIT_TRANSITIONS.get(kit.status, set())
+        if data.status != kit.status and data.status not in allowed:
+            raise ValueError(
+                f"Cannot transition stool kit from '{kit.status.value}' to '{data.status.value}'. "
+                f"Allowed: {', '.join(s.value for s in allowed) if allowed else 'none (terminal)'}."
+            )
+
         old_values: dict[str, str | None] = {"status": kit.status.value}
+        if kit.decodeage_pickup_date is not None:
+            old_values["decodeage_pickup_date"] = str(kit.decodeage_pickup_date)
         new_values: dict[str, str | None] = {"status": data.status.value}
 
         kit.status = data.status

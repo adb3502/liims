@@ -21,6 +21,13 @@ import { ImportWizardPage } from '@/features/partners/ImportWizardPage'
 import { ImportHistoryPage } from '@/features/partners/ImportHistoryPage'
 import { StoolKitTrackerPage } from '@/features/partners/StoolKitTrackerPage'
 import { OdkSyncPage } from '@/features/partners/OdkSyncPage'
+import { InstrumentDashboardPage } from '@/features/instruments/InstrumentDashboardPage'
+import { InstrumentRunsPage } from '@/features/instruments/InstrumentRunsPage'
+import { RunDetailPage } from '@/features/instruments/RunDetailPage'
+import { PlateDesignerPage } from '@/features/instruments/PlateDesignerPage'
+import { PlateDetailPage } from '@/features/instruments/PlateDetailPage'
+import { IccWorkflowPage } from '@/features/instruments/IccWorkflowPage'
+import { OmicsResultsPage } from '@/features/instruments/OmicsResultsPage'
 import { PageSpinner } from '@/components/ui/spinner'
 import type { UserRole } from '@/types'
 
@@ -202,14 +209,14 @@ export const routes: RouteObject[] = [
       {
         path: 'instruments',
         children: [
-          { index: true, element: <PlaceholderPage title="Instrument Dashboard" /> },
+          { index: true, element: <InstrumentDashboardPage /> },
           { path: 'queue', element: <PlaceholderPage title="Sample Queue" /> },
-          { path: 'plates', element: <PlaceholderPage title="Plate Designer" /> },
-          { path: 'plates/:id', element: <PlaceholderPage title="Plate Detail" /> },
-          { path: 'runs', element: <PlaceholderPage title="Instrument Runs" /> },
-          { path: 'runs/:id', element: <PlaceholderPage title="Run Detail" /> },
-          { path: 'omics', element: <PlaceholderPage title="Omics Results" /> },
-          { path: 'icc', element: <PlaceholderPage title="ICC Workflow" /> },
+          { path: 'plates', element: <PlateDesignerPage /> },
+          { path: 'plates/:id', element: <PlateDetailPage /> },
+          { path: 'runs', element: <InstrumentRunsPage /> },
+          { path: 'runs/:id', element: <RunDetailPage /> },
+          { path: 'omics', element: <OmicsResultsPage /> },
+          { path: 'icc', element: <IccWorkflowPage /> },
         ],
       },
 
