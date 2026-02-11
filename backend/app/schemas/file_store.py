@@ -1,4 +1,7 @@
-"""File store and watch directory schemas."""
+"""File store and watch directory schemas.
+
+Only metadata is exposed via API; file content is never served to the browser.
+"""
 
 import uuid
 from datetime import datetime
@@ -10,30 +13,36 @@ from app.models.enums import FileCategory
 
 # -- ManagedFile --
 
-class ManagedFileCreate(BaseModel):
-    category: FileCategory = FileCategory.OTHER
-    associated_entity_type: str | None = Field(default=None, max_length=100)
-    associated_entity_id: uuid.UUID | None = None
-
-
 class ManagedFileRead(BaseModel):
     id: uuid.UUID
-    filename: str
-    original_filename: str
-    content_type: str
+    file_path: str
+    file_name: str
     file_size: int
-    storage_path: str
-    category: FileCategory
-    uploaded_by: uuid.UUID | None
-    associated_entity_type: str | None
-    associated_entity_id: uuid.UUID | None
+    mime_type: str
     checksum_sha256: str
-    is_processed: bool
-    processing_notes: str | None
+    category: FileCategory
+    instrument_id: uuid.UUID | None
+    discovered_at: datetime
+    processed: bool
+    processed_at: datetime | None
+    entity_type: str | None
+    entity_id: uuid.UUID | None
+    notes: str | None
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ManagedFileCreate(BaseModel):
+    """Internal-only schema used when scan discovers a new file."""
+    file_path: str = Field(min_length=1, max_length=1000)
+    file_name: str = Field(min_length=1, max_length=500)
+    file_size: int = Field(ge=0)
+    mime_type: str = Field(max_length=200)
+    checksum_sha256: str = Field(min_length=64, max_length=64)
+    category: FileCategory = FileCategory.INSTRUMENT_OUTPUT
+    instrument_id: uuid.UUID | None = None
 
 
 class FileAssociateRequest(BaseModel):
@@ -41,24 +50,35 @@ class FileAssociateRequest(BaseModel):
     associated_entity_id: uuid.UUID
 
 
+class FileUpdateNotes(BaseModel):
+    notes: str | None = Field(default=None, max_length=2000)
+
+
 # -- WatchDirectory --
 
 class WatchDirectoryCreate(BaseModel):
-    directory_path: str = Field(min_length=1, max_length=1000)
-    category: FileCategory = FileCategory.OTHER
+    path: str = Field(min_length=1, max_length=1000)
+    instrument_id: uuid.UUID | None = None
     file_pattern: str = Field(default="*", max_length=200)
-    auto_process: bool = False
+    category: FileCategory = FileCategory.INSTRUMENT_OUTPUT
 
 
 class WatchDirectoryRead(BaseModel):
     id: uuid.UUID
-    directory_path: str
-    category: FileCategory
+    path: str
+    instrument_id: uuid.UUID | None
     file_pattern: str
-    auto_process: bool
+    category: FileCategory
     is_active: bool
-    last_scan_at: datetime | None
+    last_scanned_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class WatchDirectoryUpdate(BaseModel):
+    instrument_id: uuid.UUID | None = None
+    file_pattern: str | None = Field(default=None, max_length=200)
+    category: FileCategory | None = None
+    is_active: bool | None = None

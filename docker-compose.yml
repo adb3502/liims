@@ -1,27 +1,102 @@
 version: '3.8'
 
 services:
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - frontend
-      - api
-    restart: unless-stopped
-
+  # -----------------------------------------------------------------------
+  # Frontend: Nginx serving built React app + reverse proxy to API
+  # -----------------------------------------------------------------------
   frontend:
-    build: ./frontend
-    environment:
-      - VITE_API_URL=/api
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: /api
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      api:
+        condition: service_healthy
     restart: unless-stopped
+    networks:
+      - liims
 
+  # -----------------------------------------------------------------------
+  # Backend: FastAPI with uvicorn
+  # -----------------------------------------------------------------------
   api:
     build: ./backend
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://liims:${POSTGRES_PASSWORD:-password}@postgres:5432/liims
+      - REDIS_URL=redis://redis:6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - DEBUG=${DEBUG:-false}
+      - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost","http://localhost:80"]}
+      - JWT_EXPIRY_HOURS=${JWT_EXPIRY_HOURS:-24}
+      - BCRYPT_ROUNDS=${BCRYPT_ROUNDS:-12}
+      - ODK_CENTRAL_URL=${ODK_CENTRAL_URL:-}
+      - ODK_CENTRAL_EMAIL=${ODK_CENTRAL_EMAIL:-}
+      - ODK_CENTRAL_PASSWORD=${ODK_CENTRAL_PASSWORD:-}
+      - ODK_SYNC_INTERVAL_MINUTES=${ODK_SYNC_INTERVAL_MINUTES:-60}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-LIIMS Alerts}
+      - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
+      - NAS_MOUNT_PATH=/data/nas
+      - FILE_STORE_PATH=/data/file_store
+      - FILE_STORE_MAX_SIZE_MB=${FILE_STORE_MAX_SIZE_MB:-100}
+      - DASHBOARD_REFRESH_INTERVAL_MINUTES=${DASHBOARD_REFRESH_INTERVAL_MINUTES:-15}
+    volumes:
+      - ${NAS_MOUNT_PATH:-./data/nas}:/data/nas:ro
+      - file_store:/data/file_store
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - liims
+
+  # -----------------------------------------------------------------------
+  # Celery Worker: background task processing
+  # -----------------------------------------------------------------------
+  celery-worker:
+    build: ./backend
+    command: celery -A app.celery_app:celery worker -l info --concurrency=4
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://liims:${POSTGRES_PASSWORD:-password}@postgres:5432/liims
+      - REDIS_URL=redis://redis:6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - NAS_MOUNT_PATH=/data/nas
+      - FILE_STORE_PATH=/data/file_store
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-LIIMS Alerts}
+      - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
+    volumes:
+      - ${NAS_MOUNT_PATH:-./data/nas}:/data/nas:ro
+      - file_store:/data/file_store
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - liims
+
+  # -----------------------------------------------------------------------
+  # Celery Beat: periodic task scheduler
+  # -----------------------------------------------------------------------
+  celery-beat:
+    build: ./backend
+    command: celery -A app.celery_app:celery beat -l info --pidfile=/tmp/celerybeat.pid
     environment:
       - DATABASE_URL=postgresql+asyncpg://liims:${POSTGRES_PASSWORD:-password}@postgres:5432/liims
       - REDIS_URL=redis://redis:6379
@@ -31,56 +106,20 @@ services:
       - ODK_CENTRAL_URL=${ODK_CENTRAL_URL:-}
       - ODK_CENTRAL_EMAIL=${ODK_CENTRAL_EMAIL:-}
       - ODK_CENTRAL_PASSWORD=${ODK_CENTRAL_PASSWORD:-}
-      - SMTP_HOST=${SMTP_HOST:-}
-      - SMTP_PORT=${SMTP_PORT:-587}
-      - SMTP_USER=${SMTP_USER:-}
-      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
-      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-LIIMS Alerts}
-      - NAS_MOUNT_PATH=/data/nas
-    volumes:
-      - ${NAS_MOUNT_PATH:-./data/nas}:/data/nas:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-
-  celery-worker:
-    build: ./backend
-    command: celery -A app.celery_app:celery worker -l info
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://liims:${POSTGRES_PASSWORD:-password}@postgres:5432/liims
-      - REDIS_URL=redis://redis:6379
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
-      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
-      - NAS_MOUNT_PATH=/data/nas
-    volumes:
-      - ${NAS_MOUNT_PATH:-./data/nas}:/data/nas:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-
-  celery-beat:
-    build: ./backend
-    command: celery -A app.celery_app:celery beat -l info
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://liims:${POSTGRES_PASSWORD:-password}@postgres:5432/liims
-      - REDIS_URL=redis://redis:6379
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
-      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - ODK_SYNC_INTERVAL_MINUTES=${ODK_SYNC_INTERVAL_MINUTES:-60}
+      - DASHBOARD_REFRESH_INTERVAL_MINUTES=${DASHBOARD_REFRESH_INTERVAL_MINUTES:-15}
     depends_on:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - liims
 
+  # -----------------------------------------------------------------------
+  # PostgreSQL 15
+  # -----------------------------------------------------------------------
   postgres:
-    image: postgres:15
+    image: postgres:15-alpine
     environment:
       - POSTGRES_USER=liims
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
@@ -88,14 +127,21 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U liims"]
+      test: ["CMD-SHELL", "pg_isready -U liims -d liims"]
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
     restart: unless-stopped
+    networks:
+      - liims
 
+  # -----------------------------------------------------------------------
+  # Redis 7: Celery broker and cache
+  # -----------------------------------------------------------------------
   redis:
-    image: redis:alpine
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     healthcheck:
@@ -103,8 +149,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 5s
     restart: unless-stopped
+    networks:
+      - liims
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
+  file_store:
+    driver: local
+
+networks:
+  liims:
+    driver: bridge

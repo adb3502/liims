@@ -1,0 +1,183 @@
+# Production overrides for docker-compose.yml
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Requires: .env file with all production secrets configured.
+
+services:
+  # -----------------------------------------------------------------------
+  # Frontend: Nginx serving built React app
+  # -----------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: /api
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./ssl:/etc/nginx/ssl:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+    networks:
+      - frontend
+
+  # -----------------------------------------------------------------------
+  # Backend: FastAPI with gunicorn + uvicorn workers
+  # -----------------------------------------------------------------------
+  api:
+    command: >
+      gunicorn app.main:app
+      --bind 0.0.0.0:8000
+      --workers 4
+      --worker-class uvicorn.workers.UvicornWorker
+      --timeout 120
+      --graceful-timeout 30
+      --keep-alive 5
+      --access-logfile -
+      --error-logfile -
+    environment:
+      - DEBUG=false
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "10"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+    networks:
+      - frontend
+      - backend
+
+  # -----------------------------------------------------------------------
+  # Celery Worker
+  # -----------------------------------------------------------------------
+  celery-worker:
+    command: >
+      celery -A app.celery_app:celery worker
+      -l warning
+      --concurrency=4
+      --max-tasks-per-child=1000
+      --without-heartbeat
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    networks:
+      - backend
+
+  # -----------------------------------------------------------------------
+  # Celery Beat
+  # -----------------------------------------------------------------------
+  celery-beat:
+    command: >
+      celery -A app.celery_app:celery beat
+      -l warning
+      --pidfile=/tmp/celerybeat.pid
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    networks:
+      - backend
+
+  # -----------------------------------------------------------------------
+  # PostgreSQL 15 with production tuning
+  # -----------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c work_mem=8MB
+      -c maintenance_work_mem=128MB
+      -c effective_cache_size=768MB
+      -c wal_buffers=16MB
+      -c max_connections=100
+      -c checkpoint_completion_target=0.9
+      -c random_page_cost=1.1
+      -c log_min_duration_statement=1000
+      -c log_checkpoints=on
+      -c log_connections=on
+      -c log_disconnections=on
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - postgres_backups:/backups
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+    networks:
+      - backend
+
+  # -----------------------------------------------------------------------
+  # Redis 7 with production settings
+  # -----------------------------------------------------------------------
+  redis:
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --loglevel warning
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 640M
+    networks:
+      - backend
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  file_store:
+    driver: local
+  postgres_backups:
+    driver: local
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true

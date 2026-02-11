@@ -4,11 +4,12 @@ import io
 import math
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_role
+from app.core.rate_limit import RateLimiter
 from app.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
@@ -16,6 +17,8 @@ from app.schemas.query_builder import QueryExportRequest, QueryRequest
 from app.services.query_builder import QueryBuilderService
 
 router = APIRouter(prefix="/query-builder", tags=["query-builder"])
+
+_query_rate_limit = RateLimiter(max_calls=20, window_seconds=60, key="query_builder", by="ip")
 
 # Pre-build the static entity list for the /entities endpoint
 _STATIC_ENTITY_LIST: list[dict] | None = None
@@ -69,8 +72,10 @@ def _paginate_meta(page: int, per_page: int, total: int) -> dict:
 @router.post("/execute", response_model=dict)
 async def execute_query(
     data: QueryRequest,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*QUERY_ROLES))],
+    _rl: None = Depends(_query_rate_limit),
 ):
     """Execute a structured query against an entity."""
     svc = QueryBuilderService(db)
@@ -109,8 +114,10 @@ async def list_entities(
 @router.post("/export", response_model=dict)
 async def export_query(
     data: QueryExportRequest,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*QUERY_ROLES))],
+    _rl: None = Depends(_query_rate_limit),
 ):
     """Export query results as CSV download."""
     svc = QueryBuilderService(db)

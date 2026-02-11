@@ -1,25 +1,26 @@
-"""Managed file store endpoints."""
+"""Managed file store endpoints.
+
+Files live on the NAS and are discovered by periodic scans of watch directories.
+Only metadata is exposed via API; file content is never served to the browser.
+"""
 
 import math
 import uuid
-from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.core.deps import require_role
 from app.database import get_db
 from app.models.enums import FileCategory, UserRole
 from app.models.user import User
 from app.schemas.file_store import (
     FileAssociateRequest,
-    ManagedFileCreate,
     ManagedFileRead,
     WatchDirectoryCreate,
     WatchDirectoryRead,
+    WatchDirectoryUpdate,
 )
 from app.services.file_store import FileStoreService, WatchDirectoryService
 
@@ -37,8 +38,6 @@ ADMIN_ROLES = (
     UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER,
 )
 
-MAX_UPLOAD_BYTES = settings.FILE_STORE_MAX_SIZE_MB * 1024 * 1024
-
 
 def _paginate_meta(page: int, per_page: int, total: int) -> dict:
     return {
@@ -49,7 +48,7 @@ def _paginate_meta(page: int, per_page: int, total: int) -> dict:
     }
 
 
-# ── Watch Directories (static paths before /{file_id}) ────────────────
+# -- Watch Directories (static paths before /{file_id}) --
 
 @router.get("/watch-dirs", response_model=dict)
 async def list_watch_dirs(
@@ -57,9 +56,12 @@ async def list_watch_dirs(
     current_user: Annotated[User, Depends(require_role(*ADMIN_ROLES))],
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
+    include_inactive: bool = Query(False),
 ):
     svc = WatchDirectoryService(db)
-    items, total = await svc.list_watch_dirs(page=page, per_page=per_page)
+    items, total = await svc.list_watch_dirs(
+        page=page, per_page=per_page, include_inactive=include_inactive,
+    )
     return {
         "success": True,
         "data": [WatchDirectoryRead.model_validate(w).model_dump(mode="json") for w in items],
@@ -81,6 +83,23 @@ async def create_watch_dir(
     }
 
 
+@router.patch("/watch-dirs/{watch_dir_id}", response_model=dict)
+async def update_watch_dir(
+    watch_dir_id: uuid.UUID,
+    data: WatchDirectoryUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_role(*ADMIN_ROLES))],
+):
+    svc = WatchDirectoryService(db)
+    watch_dir = await svc.update_watch_dir(watch_dir_id, data)
+    if watch_dir is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Watch directory not found.")
+    return {
+        "success": True,
+        "data": WatchDirectoryRead.model_validate(watch_dir).model_dump(mode="json"),
+    }
+
+
 @router.post("/watch-dirs/{watch_dir_id}/scan", response_model=dict)
 async def scan_watch_dir(
     watch_dir_id: uuid.UUID,
@@ -89,7 +108,7 @@ async def scan_watch_dir(
 ):
     svc = WatchDirectoryService(db)
     try:
-        ingested = await svc.scan_directory(watch_dir_id, scanned_by=current_user.id)
+        ingested = await svc.scan_directory(watch_dir_id)
     except ValueError as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
     return {
@@ -99,55 +118,7 @@ async def scan_watch_dir(
     }
 
 
-# ── Upload (static path) ─────────────────────────────────────────────
-
-@router.post("/upload", response_model=dict, status_code=status.HTTP_201_CREATED)
-async def upload_file(
-    file: UploadFile,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_role(*WRITE_ROLES))],
-    category: FileCategory = Query(FileCategory.OTHER),
-    associated_entity_type: str | None = Query(None, max_length=100),
-    associated_entity_id: uuid.UUID | None = Query(None),
-):
-    if not file.filename:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No filename provided.")
-
-    file_data = await file.read()
-
-    if len(file_data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            f"File exceeds maximum size of {settings.FILE_STORE_MAX_SIZE_MB} MB.",
-        )
-
-    content_type = file.content_type or "application/octet-stream"
-
-    create_data = ManagedFileCreate(
-        category=category,
-        associated_entity_type=associated_entity_type,
-        associated_entity_id=associated_entity_id,
-    )
-
-    svc = FileStoreService(db)
-    try:
-        managed_file = await svc.upload_file(
-            file_data=file_data,
-            original_filename=file.filename,
-            content_type=content_type,
-            data=create_data,
-            uploaded_by=current_user.id,
-        )
-    except ValueError as e:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
-
-    return {
-        "success": True,
-        "data": ManagedFileRead.model_validate(managed_file).model_dump(mode="json"),
-    }
-
-
-# ── File listing ─────────────────────────────────────────────────────
+# -- File listing (static path) --
 
 @router.get("", response_model=dict)
 async def list_files(
@@ -157,15 +128,16 @@ async def list_files(
     per_page: int = Query(20, ge=1, le=100),
     search: str | None = None,
     category: FileCategory | None = None,
+    instrument_id: uuid.UUID | None = None,
     associated_entity_type: str | None = None,
     associated_entity_id: uuid.UUID | None = None,
-    sort: str = "created_at",
+    sort: str = "discovered_at",
     order: str = Query("desc", pattern="^(asc|desc)$"),
 ):
     svc = FileStoreService(db)
     items, total = await svc.list_files(
         page=page, per_page=per_page, search=search,
-        category=category,
+        category=category, instrument_id=instrument_id,
         associated_entity_type=associated_entity_type,
         associated_entity_id=associated_entity_id,
         sort=sort, order=order,
@@ -177,7 +149,39 @@ async def list_files(
     }
 
 
-# ── Parameterized file routes (after static paths) ───────────────────
+# -- Entity files (static path) --
+
+@router.get("/entity/{entity_type}/{entity_id}", response_model=dict)
+async def get_files_for_entity(
+    entity_type: str,
+    entity_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
+):
+    svc = FileStoreService(db)
+    files = await svc.get_files_for_entity(entity_type, entity_id)
+    return {
+        "success": True,
+        "data": [ManagedFileRead.model_validate(f).model_dump(mode="json") for f in files],
+    }
+
+
+# -- Verify integrity (static path) --
+
+@router.post("/verify/{file_id}", response_model=dict)
+async def verify_file_integrity(
+    file_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_role(*ADMIN_ROLES))],
+):
+    svc = FileStoreService(db)
+    result = await svc.verify_file_integrity(file_id)
+    if result.get("error") and "not found" in result["error"].lower():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, result["error"])
+    return {"success": True, "data": result}
+
+
+# -- Parameterized file routes (after static paths) --
 
 @router.get("/{file_id}", response_model=dict)
 async def get_file(
@@ -193,28 +197,6 @@ async def get_file(
         "success": True,
         "data": ManagedFileRead.model_validate(managed_file).model_dump(mode="json"),
     }
-
-
-@router.get("/{file_id}/download")
-async def download_file(
-    file_id: uuid.UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
-):
-    svc = FileStoreService(db)
-    managed_file = await svc.get_file(file_id)
-    if managed_file is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "File not found.")
-
-    file_path = Path(managed_file.storage_path)
-    if not file_path.is_file():
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "File not found on disk.")
-
-    return FileResponse(
-        path=str(file_path),
-        filename=managed_file.original_filename,
-        media_type=managed_file.content_type,
-    )
 
 
 @router.delete("/{file_id}", response_model=dict)

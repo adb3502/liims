@@ -1,5 +1,8 @@
 /**
  * TanStack Query hooks for managed file store operations.
+ *
+ * Files live on the NAS -- only metadata is exposed via API.
+ * File content is never served to the browser.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -27,32 +30,42 @@ export const FILE_CATEGORY_LABELS: Record<FileCategory, string> = {
 
 export interface ManagedFile {
   id: string
-  filename: string
-  original_filename: string
-  content_type: string
+  file_path: string
+  file_name: string
   file_size: number
-  storage_path: string
-  category: FileCategory
-  uploaded_by: string | null
-  associated_entity_type: string | null
-  associated_entity_id: string | null
+  mime_type: string
   checksum_sha256: string
-  is_processed: boolean
-  processing_notes: string | null
+  category: FileCategory
+  instrument_id: string | null
+  discovered_at: string
+  processed: boolean
+  processed_at: string | null
+  entity_type: string | null
+  entity_id: string | null
+  notes: string | null
   created_at: string
   updated_at: string
 }
 
 export interface WatchDirectory {
   id: string
-  directory_path: string
-  category: FileCategory
+  path: string
+  instrument_id: string | null
   file_pattern: string
-  auto_process: boolean
+  category: FileCategory
   is_active: boolean
-  last_scan_at: string | null
+  last_scanned_at: string | null
   created_at: string
   updated_at: string
+}
+
+export interface FileIntegrityResult {
+  file_id: string
+  file_path?: string
+  stored_checksum?: string
+  current_checksum?: string | null
+  match?: boolean
+  error?: string | null
 }
 
 // --- Query Keys ---
@@ -62,6 +75,7 @@ export const fileKeys = {
   lists: () => [...fileKeys.all, 'list'] as const,
   list: (params?: Record<string, unknown>) => [...fileKeys.lists(), params] as const,
   detail: (id: string) => [...fileKeys.all, 'detail', id] as const,
+  entity: (type: string, id: string) => [...fileKeys.all, 'entity', type, id] as const,
 }
 
 export const watchDirKeys = {
@@ -75,6 +89,7 @@ export const watchDirKeys = {
 export function useFiles(params: {
   search?: string
   category?: FileCategory
+  instrument_id?: string
   associated_entity_type?: string
   associated_entity_id?: string
   page?: number
@@ -105,57 +120,17 @@ export function useFile(id: string) {
   })
 }
 
-export function useFileUpload() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async (data: {
-      file: File
-      category?: FileCategory
-      associated_entity_type?: string
-      associated_entity_id?: string
-    }) => {
-      const formData = new FormData()
-      formData.append('file', data.file)
-
-      const params = new URLSearchParams()
-      if (data.category) params.set('category', data.category)
-      if (data.associated_entity_type) params.set('associated_entity_type', data.associated_entity_type)
-      if (data.associated_entity_id) params.set('associated_entity_id', data.associated_entity_id)
-
-      const res = await api.post<SingleResponse<ManagedFile>>(
-        `/files/upload?${params.toString()}`,
-        formData,
-        { headers: { 'Content-Type': 'multipart/form-data' } },
+export function useFilesForEntity(entityType: string, entityId: string) {
+  return useQuery({
+    queryKey: fileKeys.entity(entityType, entityId),
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: ManagedFile[] }>(
+        `/files/entity/${entityType}/${entityId}`,
       )
       return res.data.data
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: fileKeys.lists() }),
+    enabled: !!entityType && !!entityId,
   })
-}
-
-export function useFileDownload() {
-  return {
-    download: (fileId: string, filename: string) => {
-      // Use the api baseURL to construct the download URL
-      const token = localStorage.getItem('access_token')
-      const link = document.createElement('a')
-      link.href = `/api/v1/files/${fileId}/download`
-      link.download = filename
-      // For authenticated download, use fetch + blob
-      fetch(`/api/v1/files/${fileId}/download`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((res) => res.blob())
-        .then((blob) => {
-          const url = URL.createObjectURL(blob)
-          link.href = url
-          document.body.appendChild(link)
-          link.click()
-          document.body.removeChild(link)
-          URL.revokeObjectURL(url)
-        })
-    },
-  }
 }
 
 export function useDeleteFile() {
@@ -183,9 +158,24 @@ export function useAssociateFile(fileId: string) {
   })
 }
 
+export function useVerifyFileIntegrity() {
+  return useMutation({
+    mutationFn: async (fileId: string) => {
+      const res = await api.post<{ success: boolean; data: FileIntegrityResult }>(
+        `/files/verify/${fileId}`,
+      )
+      return res.data.data
+    },
+  })
+}
+
 // --- Watch Directory Queries ---
 
-export function useWatchDirectories(params: { page?: number; per_page?: number } = {}) {
+export function useWatchDirectories(params: {
+  page?: number
+  per_page?: number
+  include_inactive?: boolean
+} = {}) {
   return useQuery({
     queryKey: watchDirKeys.list(params as Record<string, unknown>),
     queryFn: async () => {
@@ -199,12 +189,29 @@ export function useCreateWatchDirectory() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (data: {
-      directory_path: string
+      path: string
+      instrument_id?: string
       category?: FileCategory
       file_pattern?: string
-      auto_process?: boolean
     }) => {
       const res = await api.post<SingleResponse<WatchDirectory>>('/files/watch-dirs', data)
+      return res.data.data
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: watchDirKeys.lists() }),
+  })
+}
+
+export function useUpdateWatchDirectory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, ...data }: {
+      id: string
+      instrument_id?: string | null
+      file_pattern?: string
+      category?: FileCategory
+      is_active?: boolean
+    }) => {
+      const res = await api.patch<SingleResponse<WatchDirectory>>(`/files/watch-dirs/${id}`, data)
       return res.data.data
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: watchDirKeys.lists() }),

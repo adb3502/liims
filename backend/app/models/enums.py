@@ -241,6 +241,8 @@ class NotificationType(str, enum.Enum):
     DISCARD_REQUEST = "discard_request"
     PROCESSING_TIMER_EXCEEDED = "processing_timer_exceeded"
     SYSTEM_ALERT = "system_alert"
+    FILE_DISCOVERED = "file_discovered"
+    FILE_INTEGRITY_FAILED = "file_integrity_failed"
 
 
 class NotificationSeverity(str, enum.Enum):

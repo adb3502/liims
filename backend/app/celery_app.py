@@ -23,6 +23,10 @@ celery.conf.update(
             "task": "app.tasks.odk.sync_odk_submissions",
             "schedule": settings.ODK_SYNC_INTERVAL_MINUTES * 60,
         },
+        "scan-watch-directories": {
+            "task": "app.tasks.files.scan_watch_directories",
+            "schedule": 300,  # every 5 minutes
+        },
         "verify-nas-files": {
             "task": "app.tasks.files.verify_nas_files",
             "schedule": 3600,  # hourly

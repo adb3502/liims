@@ -5,12 +5,13 @@ import uuid
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_role
+from app.core.rate_limit import RateLimiter
 from app.database import get_db
 from app.models.enums import ReportType, UserRole
 from app.models.system import ScheduledReport
@@ -24,6 +25,8 @@ from app.schemas.report import (
 from app.services.report import ReportService
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+
+_report_rate_limit = RateLimiter(max_calls=5, window_seconds=60, key="report_gen", by="ip")
 
 ADMIN_ROLES = (UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER)
 REPORT_ROLES = (
@@ -51,8 +54,10 @@ def _paginate_meta(page: int, per_page: int, total: int) -> dict:
 @router.post("/generate")
 async def generate_report(
     data: ReportGenerateRequest,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*REPORT_ROLES))],
+    _rl: None = Depends(_report_rate_limit),
 ):
     """Generate an on-demand PDF report. Returns inline PDF."""
     svc = ReportService(db)

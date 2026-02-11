@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/auth'
 import { Layout } from '@/components/layout/Layout'
 import { LoginPage } from '@/pages/LoginPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
+import { ForbiddenPage } from '@/pages/ForbiddenPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { ParticipantListPage } from '@/features/participants/ParticipantListPage'
 import { ParticipantDetailPage } from '@/features/participants/ParticipantDetailPage'
@@ -85,7 +86,7 @@ function RoleGuard({
   const user = useAuthStore((s) => s.user)
 
   if (!user || !roles.includes(user.role)) {
-    return <NotFoundPage />
+    return <ForbiddenPage />
   }
 
   return <>{children}</>
