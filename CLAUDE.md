@@ -101,6 +101,7 @@ cd backend && celery -A app.celery_app:celery beat -l info
 - Core entities carry a `wave` column (default 1) for multi-wave support
 - API base URL: `/api/v1` with JWT Bearer auth
 - API responses: `{ success: bool, data: ..., meta: { page, per_page, total } }`
-- No raw data exports; operational PDFs and worklists only
+- No raw data exports; operational PDFs, worklists, and label docs only
+- **Label generation**: `POST /api/v1/labels/generate-zip` returns 5 .docx files (cryovial, epigenetics, samples, edta, sst_fl_blood) formatted for A4 printing. Transitioning to thermal printing later. Uses python-docx, adapted from `label_generator.py`.
 - Fuzzy search via PostgreSQL `pg_trgm` extension
 - Audit logging on all data modifications (immutable append-only)

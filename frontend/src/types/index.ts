@@ -249,15 +249,103 @@ export interface Sample {
   participant?: Participant
 }
 
+export interface SampleDetail extends Sample {
+  status_history: SampleStatusHistory[]
+  aliquots: Sample[]
+  processing_elapsed_seconds: number | null
+}
+
+export interface SampleStatusHistory {
+  id: string
+  sample_id: string
+  previous_status: SampleStatus | null
+  new_status: SampleStatus
+  changed_at: string
+  changed_by: string
+  notes: string | null
+  location_context: string | null
+  storage_rule_override_reason: string | null
+}
+
 export interface SampleCreate {
   participant_id: string
   sample_type: SampleType
   sample_subtype?: string
   parent_sample_id?: string
   initial_volume_ul?: number
-  collection_datetime?: string
   collection_site_id?: string
+  wave?: number
   notes?: string
+}
+
+export interface SampleStatusUpdate {
+  status: SampleStatus
+  notes?: string
+  location_context?: string
+  storage_rule_override_reason?: string
+}
+
+export interface VolumeWithdrawRequest {
+  volume_ul: number
+  reason?: string
+}
+
+export type DiscardRequestStatus = 'pending' | 'approved' | 'rejected'
+
+export interface DiscardRequest {
+  id: string
+  sample_id: string
+  requested_by: string
+  requested_at: string
+  reason: DiscardReason
+  reason_notes: string | null
+  approved_by: string | null
+  approved_at: string | null
+  status: DiscardRequestStatus
+  rejection_reason: string | null
+}
+
+export interface DiscardRequestCreate {
+  reason: DiscardReason
+  reason_notes?: string
+}
+
+export interface DiscardApproval {
+  approved: boolean
+  rejection_reason?: string
+}
+
+export const SAMPLE_TYPE_LABELS: Record<SampleType, string> = {
+  plasma: 'Plasma',
+  epigenetics: 'Epigenetics',
+  extra_blood: 'Extra Blood',
+  rbc_smear: 'RBC Smear',
+  cheek_swab: 'Cheek Swab',
+  hair: 'Hair',
+  urine: 'Urine',
+  stool_kit: 'Stool Kit',
+}
+
+export const SAMPLE_STATUS_LABELS: Record<SampleStatus, string> = {
+  registered: 'Registered',
+  collected: 'Collected',
+  transported: 'Transported',
+  received: 'Received',
+  processing: 'Processing',
+  stored: 'Stored',
+  reserved: 'Reserved',
+  in_analysis: 'In Analysis',
+  pending_discard: 'Pending Discard',
+  depleted: 'Depleted',
+  discarded: 'Discarded',
+}
+
+export const DISCARD_REASON_LABELS: Record<DiscardReason, string> = {
+  contamination: 'Contamination',
+  depleted: 'Depleted',
+  consent_withdrawal: 'Consent Withdrawal',
+  expired: 'Expired',
+  other: 'Other',
 }
 
 // --- Storage ---

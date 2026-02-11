@@ -7,6 +7,9 @@ import { DashboardPage } from '@/pages/DashboardPage'
 import { ParticipantListPage } from '@/features/participants/ParticipantListPage'
 import { ParticipantDetailPage } from '@/features/participants/ParticipantDetailPage'
 import { ParticipantForm } from '@/features/participants/ParticipantForm'
+import { SampleListPage } from '@/features/samples/SampleListPage'
+import { SampleDetailPage } from '@/features/samples/SampleDetailPage'
+import { SampleRegisterForm } from '@/features/samples/SampleRegisterForm'
 import { PageSpinner } from '@/components/ui/spinner'
 import type { UserRole } from '@/types'
 
@@ -122,10 +125,17 @@ export const routes: RouteObject[] = [
       {
         path: 'samples',
         children: [
-          { index: true, element: <PlaceholderPage title="Samples" /> },
-          { path: 'register', element: <PlaceholderPage title="Register Samples" /> },
+          { index: true, element: <SampleListPage /> },
+          {
+            path: 'register',
+            element: (
+              <RoleGuard roles={['super_admin', 'lab_manager', 'lab_technician', 'field_coordinator']}>
+                <SampleRegisterForm />
+              </RoleGuard>
+            ),
+          },
           { path: 'processing', element: <PlaceholderPage title="Sample Processing" /> },
-          { path: ':id', element: <PlaceholderPage title="Sample Detail" /> },
+          { path: ':id', element: <SampleDetailPage /> },
         ],
       },
 
