@@ -63,18 +63,25 @@ export const FREEZER_TYPE_LABELS: Record<FreezerType, string> = {
 
 export type BoxType = 'cryo_81' | 'cryo_100' | 'abdos_81' | 'custom'
 
-export type NotificationSeverity = 'info' | 'warning' | 'critical'
+export type NotificationSeverity = 'info' | 'warning' | 'error' | 'critical'
 
 export type NotificationType =
   | 'odk_sync_failure'
   | 'freezer_capacity_warning'
+  | 'temperature_excursion'
+  | 'sample_processing_overdue'
+  | 'partner_import_complete'
+  | 'scheduled_report_generated'
+  | 'file_discovered'
+  | 'file_integrity_failed'
+  | 'system_alert'
+  | 'general'
   | 'freezer_temp_event'
   | 'consent_withdrawal'
   | 'import_error'
   | 'backup_stale'
   | 'discard_request'
   | 'processing_timer_exceeded'
-  | 'system_alert'
 
 export type DiscardReason =
   | 'contamination'
@@ -82,6 +89,8 @@ export type DiscardReason =
   | 'consent_withdrawal'
   | 'expired'
   | 'other'
+
+export type AuditAction = 'create' | 'update' | 'delete' | 'view' | 'export'
 
 // --- Base interfaces ---
 

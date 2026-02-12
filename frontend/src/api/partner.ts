@@ -51,6 +51,8 @@ export const stoolKitKeys = {
 
 export const partnerResultKeys = {
   all: ['partner-results'] as const,
+  lists: () => [...partnerResultKeys.all, 'list'] as const,
+  list: (params?: Record<string, unknown>) => [...partnerResultKeys.lists(), params] as const,
   byParticipant: (participantId: string) =>
     [...partnerResultKeys.all, 'participant', participantId] as const,
 }
@@ -161,6 +163,22 @@ export function useExecuteImport() {
 }
 
 // --- Partner Results ---
+
+export function usePartnerResultsList(params: {
+  partner_name?: PartnerName
+  match_status?: string
+  test_name?: string
+  page?: number
+  per_page?: number
+} = {}) {
+  return useQuery({
+    queryKey: partnerResultKeys.list(params),
+    queryFn: async () => {
+      const res = await api.get<PaginatedResponse<PartnerLabResult>>('/partner/partner-results', { params })
+      return res.data
+    },
+  })
+}
 
 export function usePartnerResults(participantId: string) {
   return useQuery({

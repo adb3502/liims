@@ -22,6 +22,9 @@ import { ImportWizardPage } from '@/features/partners/ImportWizardPage'
 import { ImportHistoryPage } from '@/features/partners/ImportHistoryPage'
 import { StoolKitTrackerPage } from '@/features/partners/StoolKitTrackerPage'
 import { OdkSyncPage } from '@/features/partners/OdkSyncPage'
+import { PartnerResultsPage } from '@/features/partners/PartnerResultsPage'
+import { SyncConflictsPage } from '@/features/sync/SyncConflictsPage'
+import { ReadReplicaPage } from '@/features/admin/ReadReplicaPage'
 import { InstrumentDashboardPage } from '@/features/instruments/InstrumentDashboardPage'
 import { InstrumentRunsPage } from '@/features/instruments/InstrumentRunsPage'
 import { RunDetailPage } from '@/features/instruments/RunDetailPage'
@@ -35,7 +38,18 @@ import { QualityDashboardPage } from '@/features/reports/QualityDashboardPage'
 import { QueryBuilderPage } from '@/features/reports/QueryBuilderPage'
 import { ReportGeneratorPage } from '@/features/reports/ReportGeneratorPage'
 import { FileManagerPage } from '@/features/files/FileManagerPage'
+import { UserManagementPage } from '@/features/admin/UserManagementPage'
+import { UserDetailPage } from '@/features/admin/UserDetailPage'
+import { SystemSettingsPage } from '@/features/admin/SystemSettingsPage'
+import { AuditLogsPage } from '@/features/admin/AuditLogsPage'
+import { AccessLogsPage } from '@/features/admin/AccessLogsPage'
+import { ScheduledReportsPage } from '@/features/admin/ScheduledReportsPage'
+import { NotificationsPage } from '@/features/notifications/NotificationsPage'
+import { ProfilePage } from '@/features/profile/ProfilePage'
 import { PageSpinner } from '@/components/ui/spinner'
+import { SampleProcessingPage } from '@/features/samples/SampleProcessingPage'
+import { SampleQueuePage } from '@/features/instruments/SampleQueuePage'
+import { SitesDashboardPage } from '@/features/reports/SitesDashboardPage'
 import type { UserRole } from '@/types'
 
 // --- Route guards ---
@@ -92,21 +106,6 @@ function RoleGuard({
   return <>{children}</>
 }
 
-// --- Placeholder page ---
-
-function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <div>
-      <h1 className="text-2xl font-bold text-foreground">{title}</h1>
-      <div className="mt-4 rounded-lg border border-dashed border-border p-12 text-center">
-        <p className="text-sm text-muted-foreground">
-          This page is under development.
-        </p>
-      </div>
-    </div>
-  )
-}
-
 // --- Route definitions ---
 
 export const routes: RouteObject[] = [
@@ -141,7 +140,7 @@ export const routes: RouteObject[] = [
               </RoleGuard>
             ),
           },
-          { path: 'odk-sync', element: <PlaceholderPage title="ODK Sync Status" /> },
+          { path: 'odk-sync', element: <OdkSyncPage /> },
           { path: ':id', element: <ParticipantDetailPage /> },
         ],
       },
@@ -159,7 +158,7 @@ export const routes: RouteObject[] = [
               </RoleGuard>
             ),
           },
-          { path: 'processing', element: <PlaceholderPage title="Sample Processing" /> },
+          { path: 'processing', element: <SampleProcessingPage /> },
           { path: ':id', element: <SampleDetailPage /> },
         ],
       },
@@ -196,7 +195,7 @@ export const routes: RouteObject[] = [
           { path: 'events', element: <FieldEventListPage /> },
           { path: 'events/:id', element: <FieldEventDetailPage /> },
           { path: 'events/:id/digitize', element: <BulkDigitizePage /> },
-          { path: 'conflicts', element: <PlaceholderPage title="Sync Conflicts" /> },
+          { path: 'conflicts', element: <SyncConflictsPage /> },
         ],
       },
 
@@ -206,7 +205,7 @@ export const routes: RouteObject[] = [
         children: [
           { path: 'import', element: <ImportWizardPage /> },
           { path: 'history', element: <ImportHistoryPage /> },
-          { path: 'results', element: <PlaceholderPage title="Partner Results" /> },
+          { path: 'results', element: <PartnerResultsPage /> },
           { path: 'stool-kits', element: <StoolKitTrackerPage /> },
           { path: 'odk-sync', element: <OdkSyncPage /> },
         ],
@@ -217,7 +216,7 @@ export const routes: RouteObject[] = [
         path: 'instruments',
         children: [
           { index: true, element: <InstrumentDashboardPage /> },
-          { path: 'queue', element: <PlaceholderPage title="Sample Queue" /> },
+          { path: 'queue', element: <SampleQueuePage /> },
           { path: 'plates', element: <PlateDesignerPage /> },
           { path: 'plates/:id', element: <PlateDetailPage /> },
           { path: 'runs', element: <InstrumentRunsPage /> },
@@ -233,7 +232,7 @@ export const routes: RouteObject[] = [
         children: [
           { path: 'enrollment', element: <EnrollmentDashboardPage /> },
           { path: 'inventory', element: <InventoryDashboardPage /> },
-          { path: 'sites', element: <PlaceholderPage title="Sites Dashboard" /> },
+          { path: 'sites', element: <SitesDashboardPage /> },
           { path: 'data-availability', element: <ReportGeneratorPage /> },
           { path: 'quality', element: <QualityDashboardPage /> },
           { path: 'query-builder', element: <QueryBuilderPage /> },
@@ -249,22 +248,22 @@ export const routes: RouteObject[] = [
           </RoleGuard>
         ),
         children: [
-          { path: 'users', element: <PlaceholderPage title="User Management" /> },
-          { path: 'users/:id', element: <PlaceholderPage title="User Detail" /> },
-          { path: 'replica', element: <PlaceholderPage title="Read Replica Accounts" /> },
-          { path: 'audit-logs', element: <PlaceholderPage title="Audit Logs" /> },
-          { path: 'access-logs', element: <PlaceholderPage title="Access Logs" /> },
-          { path: 'reports', element: <PlaceholderPage title="Scheduled Reports" /> },
-          { path: 'settings', element: <PlaceholderPage title="System Settings" /> },
+          { path: 'users', element: <UserManagementPage /> },
+          { path: 'users/:id', element: <UserDetailPage /> },
+          { path: 'replica', element: <ReadReplicaPage /> },
+          { path: 'audit-logs', element: <AuditLogsPage /> },
+          { path: 'access-logs', element: <AccessLogsPage /> },
+          { path: 'reports', element: <ScheduledReportsPage /> },
+          { path: 'settings', element: <SystemSettingsPage /> },
           { path: 'files', element: <FileManagerPage /> },
         ],
       },
 
       // Notifications
-      { path: 'notifications', element: <PlaceholderPage title="Notifications" /> },
+      { path: 'notifications', element: <NotificationsPage /> },
 
       // Profile
-      { path: 'profile', element: <PlaceholderPage title="Profile" /> },
+      { path: 'profile', element: <ProfilePage /> },
 
       // Catch-all
       { path: '*', element: <NotFoundPage /> },
