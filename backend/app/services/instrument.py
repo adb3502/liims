@@ -11,7 +11,7 @@ from decimal import Decimal
 from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enums import AuditAction, OmicsResultType, QCStatus, RunStatus
+from app.models.enums import AuditAction, OmicsResultType, QCStatus, RunStatus, RunType
 from app.models.instrument import (
     Instrument,
     InstrumentRun,

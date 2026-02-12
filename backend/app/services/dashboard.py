@@ -471,43 +471,53 @@ class DashboardService:
     # ── Combined Overview ─────────────────────────────────────────────
 
     async def overview(self) -> dict:
-        """High-level combined dashboard for the main page."""
-        # Quick counts
+        """High-level combined dashboard for the main page.
+
+        Returns a nested structure matching the frontend DashboardOverview
+        interface with keys: enrollment, samples, storage, field_ops,
+        instruments, quality.
+        """
+        # ── Enrollment ────────────────────────────────────────────────
         participants_q = select(func.count()).where(
             Participant.is_deleted == False  # noqa: E712
         )
         participants = (await self.db.execute(participants_q)).scalar_one()
 
+        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+        recent_enrollment_q = select(func.count()).where(
+            Participant.is_deleted == False,  # noqa: E712
+            Participant.enrollment_date >= thirty_days_ago,
+        )
+        recent_30d = (await self.db.execute(recent_enrollment_q)).scalar_one()
+
+        # ── Samples ───────────────────────────────────────────────────
         samples_q = select(func.count()).where(
             Sample.is_deleted == False  # noqa: E712
         )
         samples = (await self.db.execute(samples_q)).scalar_one()
 
-        events_q = select(func.count()).where(
-            FieldEvent.is_deleted == False  # noqa: E712
-        )
-        events = (await self.db.execute(events_q)).scalar_one()
-
-        runs_q = select(func.count()).where(
-            InstrumentRun.is_deleted == False  # noqa: E712
-        )
-        runs = (await self.db.execute(runs_q)).scalar_one()
-
-        # Samples stored vs total
         stored_q = select(func.count()).where(
             Sample.is_deleted == False,  # noqa: E712
             Sample.status == SampleStatus.STORED,
         )
         stored = (await self.db.execute(stored_q)).scalar_one()
 
-        # Active runs (in_progress)
-        active_runs_q = select(func.count()).where(
-            InstrumentRun.is_deleted == False,  # noqa: E712
-            InstrumentRun.status == RunStatus.IN_PROGRESS,
-        )
-        active_runs = (await self.db.execute(active_runs_q)).scalar_one()
+        # ── Storage utilization ───────────────────────────────────────
+        total_positions_q = select(func.count(StoragePosition.id))
+        total_positions = (await self.db.execute(total_positions_q)).scalar_one()
 
-        # Upcoming events count (next 7 days)
+        occupied_q = select(func.count()).where(
+            StoragePosition.sample_id.isnot(None)
+        )
+        occupied = (await self.db.execute(occupied_q)).scalar_one()
+
+        utilization_pct = (
+            round(occupied / total_positions * 100, 1)
+            if total_positions > 0
+            else 0.0
+        )
+
+        # ── Field ops ────────────────────────────────────────────────
         today = date.today()
         upcoming_q = select(func.count()).where(
             FieldEvent.is_deleted == False,  # noqa: E712
@@ -516,12 +526,66 @@ class DashboardService:
         )
         upcoming = (await self.db.execute(upcoming_q)).scalar_one()
 
+        total_checkins_q = select(func.count(FieldEventParticipant.id))
+        total_checkins = (await self.db.execute(total_checkins_q)).scalar_one()
+
+        checked_in_q = select(func.count()).where(
+            FieldEventParticipant.check_in_time.isnot(None)
+        )
+        checked_in = (await self.db.execute(checked_in_q)).scalar_one()
+
+        completion_rate = (
+            round(checked_in / total_checkins, 3)
+            if total_checkins > 0
+            else 0.0
+        )
+
+        # ── Instruments ──────────────────────────────────────────────
+        active_runs_q = select(func.count()).where(
+            InstrumentRun.is_deleted == False,  # noqa: E712
+            InstrumentRun.status == RunStatus.IN_PROGRESS,
+        )
+        active_runs = (await self.db.execute(active_runs_q)).scalar_one()
+
+        # ── Quality ──────────────────────────────────────────────────
+        qc_total_q = select(func.count()).where(
+            InstrumentRun.is_deleted == False,  # noqa: E712
+            InstrumentRun.qc_status.isnot(None),
+        )
+        qc_total = (await self.db.execute(qc_total_q)).scalar_one()
+
+        qc_passed_q = select(func.count()).where(
+            InstrumentRun.is_deleted == False,  # noqa: E712
+            InstrumentRun.qc_status == QCStatus.PASSED,
+        )
+        qc_passed = (await self.db.execute(qc_passed_q)).scalar_one()
+
+        qc_pass_rate = (
+            round(qc_passed / qc_total * 100, 1)
+            if qc_total > 0
+            else 0.0
+        )
+
         return {
-            "total_participants": participants,
-            "total_samples": samples,
-            "samples_stored": stored,
-            "total_field_events": events,
-            "upcoming_events_7d": upcoming,
-            "total_instrument_runs": runs,
-            "active_instrument_runs": active_runs,
+            "enrollment": {
+                "total": participants,
+                "recent_30d": recent_30d,
+            },
+            "samples": {
+                "total": samples,
+                "in_storage": stored,
+            },
+            "storage": {
+                "utilization_pct": utilization_pct,
+            },
+            "field_ops": {
+                "upcoming_count": upcoming,
+                "completion_rate": completion_rate,
+            },
+            "instruments": {
+                "active_runs": active_runs,
+            },
+            "quality": {
+                "qc_pass_rate": qc_pass_rate,
+            },
         }

@@ -14,7 +14,6 @@ import {
   TableCell,
 } from '@/components/ui/table'
 import { PageSpinner } from '@/components/ui/spinner'
-import { cn } from '@/lib/utils'
 import type { SampleStatus, SampleType } from '@/types'
 import {
   Plus,

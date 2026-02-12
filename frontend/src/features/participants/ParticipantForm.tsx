@@ -29,7 +29,7 @@ const participantSchema = z.object({
   collection_site_id: z.string().uuid('Please select a collection site'),
   enrollment_date: z.string().min(1, 'Enrollment date is required'),
   enrollment_source: z.enum(['manual', 'bulk_import']).default('manual'),
-  wave: z.coerce.number().int().min(1).default(1),
+  wave: z.coerce.number().int().min(1).optional().default(1),
 })
 
 type ParticipantFormData = z.infer<typeof participantSchema>
@@ -45,7 +45,8 @@ export function ParticipantForm() {
     formState: { errors },
     watch,
   } = useForm<ParticipantFormData>({
-    resolver: zodResolver(participantSchema),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(participantSchema) as any,
     defaultValues: {
       enrollment_source: 'manual',
       wave: 1,
@@ -86,7 +87,7 @@ export function ParticipantForm() {
           <CardTitle>Create Participant</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit as Parameters<typeof handleSubmit>[0])} className="space-y-4">
             {/* Auto-preview of generated code */}
             {groupCode && participantNumber && (
               <div className="rounded-md bg-muted px-4 py-2 mb-2">

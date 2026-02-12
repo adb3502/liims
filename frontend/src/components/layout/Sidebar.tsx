@@ -14,7 +14,6 @@ import {
   Shield,
   ChevronLeft,
   ChevronRight,
-  FileBox,
 } from 'lucide-react'
 
 interface NavItem {

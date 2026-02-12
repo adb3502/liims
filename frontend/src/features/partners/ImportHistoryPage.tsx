@@ -19,7 +19,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { cn } from '@/lib/utils'
 import type { PartnerName } from '@/types'
 import { PARTNER_LABELS } from '@/types'
 import {
@@ -29,7 +28,6 @@ import {
   ChevronRight,
   CheckCircle2,
   XCircle,
-  AlertTriangle,
 } from 'lucide-react'
 
 const PER_PAGE = 20

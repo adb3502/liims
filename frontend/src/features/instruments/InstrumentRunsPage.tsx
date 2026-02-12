@@ -22,7 +22,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { cn } from '@/lib/utils'
 import type { RunType, RunStatus, QCStatus } from '@/types'
 import {
   RUN_TYPE_LABELS,
@@ -35,8 +34,6 @@ import {
   Play,
   ChevronLeft,
   ChevronRight,
-  ArrowUpDown,
-  FlaskConical,
 } from 'lucide-react'
 
 const PER_PAGE = 25

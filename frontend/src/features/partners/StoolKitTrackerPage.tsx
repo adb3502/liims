@@ -21,7 +21,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { cn } from '@/lib/utils'
 import type { StoolKitStatus } from '@/types'
 import { STOOL_KIT_STATUS_LABELS } from '@/types'
 import {
@@ -53,7 +52,7 @@ export function StoolKitTrackerPage() {
   const { hasRole } = useAuth()
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<StoolKitStatus | ''>('')
-  const [participantFilter, setParticipantFilter] = useState('')
+  const [participantFilter] = useState('')
   const [showIssueDialog, setShowIssueDialog] = useState(false)
   const [editingKit, setEditingKit] = useState<{ id: string; status: StoolKitStatus } | null>(null)
 

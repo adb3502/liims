@@ -12,7 +12,6 @@ import {
   TableHead,
   TableCell,
 } from '@/components/ui/table'
-import { cn } from '@/lib/utils'
 import { FIELD_EVENT_STATUS_LABELS } from '@/types'
 import type { FieldEventStatus, FieldEventParticipant } from '@/types'
 import { ArrowLeft, Save, CheckCircle2 } from 'lucide-react'

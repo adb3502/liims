@@ -258,7 +258,6 @@ class StoolKit(BaseModel):
     )
     status: Mapped[StoolKitStatus] = mapped_column(
         default=StoolKitStatus.ISSUED,
-        server_default=StoolKitStatus.ISSUED.value,
         nullable=False,
     )
     decodeage_pickup_date: Mapped[date | None] = mapped_column(Date, nullable=True)

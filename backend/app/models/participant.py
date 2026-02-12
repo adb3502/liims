@@ -62,7 +62,6 @@ class Participant(BaseModel):
     )
     enrollment_source: Mapped[EnrollmentSource] = mapped_column(
         default=EnrollmentSource.ODK,
-        server_default=EnrollmentSource.ODK.value,
     )
     odk_submission_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     wave: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)

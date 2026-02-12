@@ -177,7 +177,7 @@ export function ReportGeneratorPage() {
                   >
                     <option value="">All Sites</option>
                     {(sites ?? []).map((s) => (
-                      <option key={s.id} value={s.id}>{s.site_name}</option>
+                      <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
                   </select>
                 </div>

@@ -41,7 +41,8 @@ export function ConsentForm({ participantId, onClose }: ConsentFormProps) {
     handleSubmit,
     formState: { errors },
   } = useForm<ConsentFormData>({
-    resolver: zodResolver(consentSchema),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(consentSchema) as any,
     defaultValues: {
       consent_given: true,
       is_proxy: false,
@@ -70,7 +71,7 @@ export function ConsentForm({ participantId, onClose }: ConsentFormProps) {
           <DialogTitle>Record Consent</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-4">
+        <form onSubmit={handleSubmit(onSubmit as Parameters<typeof handleSubmit>[0])} className="space-y-4 mt-4">
           {/* Consent type */}
           <div className="space-y-2">
             <Label htmlFor="consent_type">Consent Type</Label>

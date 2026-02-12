@@ -158,7 +158,6 @@ class SampleDiscardRequest(BaseModelNoSoftDelete):
     )
     status: Mapped[DiscardRequestStatus] = mapped_column(
         default=DiscardRequestStatus.PENDING,
-        server_default=DiscardRequestStatus.PENDING.value,
         nullable=False,
     )
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)

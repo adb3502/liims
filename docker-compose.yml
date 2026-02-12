@@ -50,6 +50,12 @@ services:
     volumes:
       - ${NAS_MOUNT_PATH:-./data/nas}:/data/nas:ro
       - file_store:/data/file_store
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy

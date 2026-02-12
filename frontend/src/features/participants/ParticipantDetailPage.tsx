@@ -27,20 +27,6 @@ const CONSENT_TYPE_LABELS: Record<string, string> = {
   proxy_interview: 'Proxy Interview',
 }
 
-const SAMPLE_STATUS_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'secondary'> = {
-  registered: 'secondary',
-  collected: 'default',
-  transported: 'default',
-  received: 'default',
-  processing: 'warning',
-  stored: 'success',
-  reserved: 'default',
-  in_analysis: 'default',
-  pending_discard: 'destructive',
-  depleted: 'secondary',
-  discarded: 'destructive',
-}
-
 export function ParticipantDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()

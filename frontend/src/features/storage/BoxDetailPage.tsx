@@ -147,7 +147,7 @@ export function BoxDetailPage() {
   const totalSlots = box.rows * box.columns
   const pct = totalSlots > 0 ? Math.round((occupiedCount / totalSlots) * 100) : 0
 
-  function handleCellClick(pos: PositionRead | null, row: number, col: number) {
+  function handleCellClick(pos: PositionRead | null, _row: number, _col: number) {
     if (!pos) return
     if (pos.sample_id) {
       // Occupied -- show options (navigate to sample or unassign)

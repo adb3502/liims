@@ -58,7 +58,7 @@ export interface ParticipantListParams {
 export interface ParticipantDetail extends Participant {
   consents: Consent[]
   sample_counts: Record<string, number>
-  collection_site: CollectionSite | null
+  collection_site: CollectionSite | undefined
 }
 
 // --- Hooks ---

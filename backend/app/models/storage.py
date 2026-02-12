@@ -118,7 +118,7 @@ class StorageBox(BaseModel):
     rows: Mapped[int] = mapped_column(Integer, default=9, server_default="9", nullable=False)
     columns: Mapped[int] = mapped_column(Integer, default=9, server_default="9", nullable=False)
     box_type: Mapped[BoxType] = mapped_column(
-        default=BoxType.CRYO_81, server_default=BoxType.CRYO_81.value
+        default=BoxType.CRYO_81,
     )
     box_material: Mapped[BoxMaterial | None] = mapped_column(nullable=True)
     position_in_rack: Mapped[int | None] = mapped_column(Integer, nullable=True)

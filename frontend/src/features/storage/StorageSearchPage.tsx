@@ -23,7 +23,6 @@ function useDebounce(value: string, delay: number): string {
 }
 
 export function StorageSearchPage() {
-  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const initialQuery = searchParams.get('q') ?? ''
   const [searchInput, setSearchInput] = useState(initialQuery)

@@ -73,8 +73,6 @@ export function RunDetailPage() {
   const runId = id ?? ''
   const { data: run, isLoading, isError } = useRunDetail(runId)
   const startMutation = useStartRun(runId)
-  const completeMutation = useCompleteRun(runId)
-  const uploadMutation = useUploadRunResults(runId)
 
   const [showCompleteDialog, setShowCompleteDialog] = useState(false)
   const [showFailDialog, setShowFailDialog] = useState(false)

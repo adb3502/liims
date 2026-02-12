@@ -31,7 +31,7 @@ const fieldEventSchema = z.object({
   coordinator_id: z.string().optional(),
   partner_lab: z.string().optional(),
   notes: z.string().optional(),
-  wave: z.coerce.number().int().min(1).default(1),
+  wave: z.coerce.number().int().min(1).optional().default(1),
 })
 
 type FieldEventFormData = z.infer<typeof fieldEventSchema>
@@ -51,7 +51,8 @@ export function FieldEventCreateDialog({
     handleSubmit,
     formState: { errors },
   } = useForm<FieldEventFormData>({
-    resolver: zodResolver(fieldEventSchema),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(fieldEventSchema) as any,
     defaultValues: {
       event_type: 'rural_mass',
       wave: 1,
@@ -83,7 +84,7 @@ export function FieldEventCreateDialog({
         <DialogHeader>
           <DialogTitle>Create Field Event</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-2">
+        <form onSubmit={handleSubmit(onSubmit as Parameters<typeof handleSubmit>[0])} className="space-y-4 mt-2">
           <div className="space-y-1.5">
             <Label htmlFor="event_name">Event Name</Label>
             <Input

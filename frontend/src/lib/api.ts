@@ -71,9 +71,9 @@ api.interceptors.response.use(
       error.response?.status === 401 &&
       !originalRequest.url?.includes('/auth/login') &&
       !originalRequest.url?.includes('/auth/refresh') &&
-      !(originalRequest as Record<string, unknown>)._retry
+      !(originalRequest as unknown as Record<string, unknown>)._retry
     ) {
-      ;(originalRequest as Record<string, unknown>)._retry = true
+      ;(originalRequest as unknown as Record<string, unknown>)._retry = true
       try {
         const newToken = await silentRefresh()
         originalRequest.headers.Authorization = `Bearer ${newToken}`

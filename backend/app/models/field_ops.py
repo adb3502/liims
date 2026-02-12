@@ -80,7 +80,7 @@ class FieldEventParticipant(UUIDPrimaryKeyMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     sync_status: Mapped[SyncStatus] = mapped_column(
-        default=SyncStatus.SYNCED, server_default=SyncStatus.SYNCED.value
+        default=SyncStatus.SYNCED,
     )
     offline_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 

@@ -35,7 +35,6 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
-  AlertTriangle,
 } from 'lucide-react'
 
 const SYNC_STATUS_BADGE: Record<OdkSyncStatus, 'success' | 'destructive' | 'warning'> = {

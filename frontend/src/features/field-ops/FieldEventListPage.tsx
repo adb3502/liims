@@ -14,8 +14,7 @@ import {
   TableHead,
   TableCell,
 } from '@/components/ui/table'
-import { cn } from '@/lib/utils'
-import type { FieldEventStatus, FieldEventType } from '@/types'
+import type { FieldEventStatus } from '@/types'
 import {
   FIELD_EVENT_STATUS_LABELS,
   FIELD_EVENT_TYPE_LABELS,

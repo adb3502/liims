@@ -78,3 +78,14 @@ async def get_overview(
     svc = DashboardService(db)
     data = await svc.overview()
     return {"success": True, "data": data}
+
+
+@router.get("/summary", response_model=dict)
+async def get_summary(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
+):
+    """Alias for /overview – kept for backward compatibility."""
+    svc = DashboardService(db)
+    data = await svc.overview()
+    return {"success": True, "data": data}

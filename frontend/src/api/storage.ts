@@ -133,7 +133,7 @@ export function useFreezers(params: {
     queryKey: storageKeys.freezerList(params as Record<string, unknown>),
     queryFn: async () => {
       const cleanParams = Object.fromEntries(
-        Object.entries(params).filter(([, v]) => v != null && v !== '')
+        Object.entries(params).filter(([, v]) => v != null)
       )
       const response = await api.get<PaginatedResponse<FreezerRead>>(
         '/storage/freezers',

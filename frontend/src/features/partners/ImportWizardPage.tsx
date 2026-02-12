@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useUploadCsv, useImportPreview, useExecuteImport } from '@/api/partner'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
@@ -33,7 +32,7 @@ export function ImportWizardPage() {
   const [partner, setPartner] = useState<PartnerName | ''>('')
   const [file, setFile] = useState<File | null>(null)
   const [importId, setImportId] = useState('')
-  const [importDone, setImportDone] = useState(false)
+  const [, setImportDone] = useState(false)
 
   const uploadMutation = useUploadCsv()
   const executeMutation = useExecuteImport()

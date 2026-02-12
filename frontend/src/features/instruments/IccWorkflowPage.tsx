@@ -793,7 +793,6 @@ function IccDetailDrawer({
                 {ICC_STAGES.map((stage, i) => {
                   const isPast = i < currentStageIndex
                   const isCurrent = i === currentStageIndex
-                  const colors = STAGE_COLORS[stage]
                   return (
                     <div
                       key={stage}

@@ -287,7 +287,9 @@ async def seed_participants(
         )
         participants.append((pid, pcode, site_id))
 
-        # Add consents
+    await session.flush()  # flush participants before inserting consents (FK)
+
+    for pid, _, _ in participants:
         for ct in [ConsentType.HOUSEHOLD, ConsentType.INDIVIDUAL]:
             session.add(
                 Consent(
@@ -344,6 +346,7 @@ async def seed_samples(
     ]
 
     sample_ids: list[uuid.UUID] = []
+    sample_status_entries: list[tuple] = []
     sample_counter = 0
 
     for pid, pcode, site_id in participants:
@@ -380,19 +383,22 @@ async def seed_samples(
                 )
             )
             sample_ids.append(sid)
+            sample_status_entries.append((sid, status, col_dt))
 
-            # Add status history entry
-            session.add(
-                SampleStatusHistory(
-                    id=uuid.uuid4(),
-                    sample_id=sid,
-                    previous_status=None,
-                    new_status=status,
-                    changed_at=col_dt,
-                    changed_by=tech_id,
-                    notes="Initial collection",
-                )
+    await session.flush()  # flush samples before inserting status history (FK)
+
+    for sid, status, col_dt in sample_status_entries:
+        session.add(
+            SampleStatusHistory(
+                id=uuid.uuid4(),
+                sample_id=sid,
+                previous_status=None,
+                new_status=status,
+                changed_at=col_dt,
+                changed_by=tech_id,
+                notes="Initial collection",
             )
+        )
 
     await session.flush()
     print(f"  [samples] Seeded {len(sample_ids)} samples with status history.")
@@ -427,6 +433,8 @@ async def seed_storage(
     occupied_samples = random.sample(sample_ids, min(40, len(sample_ids)))
     sample_idx = 0
 
+    # -- Freezers --
+    freezer_data: list[tuple[uuid.UUID, str, int, int]] = []
     for fname, ftype, loc, rack_count, slots in FREEZERS:
         fid = uuid.uuid4()
         session.add(
@@ -442,7 +450,13 @@ async def seed_storage(
                 created_by=admin_id,
             )
         )
+        freezer_data.append((fid, fname, rack_count, slots))
 
+    await session.flush()  # flush freezers before racks (FK)
+
+    # -- Racks --
+    rack_data: list[tuple[uuid.UUID, str, int]] = []  # (rack_id, freezer_name, slots)
+    for fid, fname, rack_count, slots in freezer_data:
         for r in range(1, rack_count + 1):
             rid = uuid.uuid4()
             session.add(
@@ -454,49 +468,58 @@ async def seed_storage(
                     capacity=slots,
                 )
             )
+            rack_data.append((rid, fname, r))
 
-            # 2 boxes per rack
-            for b in range(1, 3):
-                bid = uuid.uuid4()
+    await session.flush()  # flush racks before boxes (FK)
+
+    # -- Boxes --
+    box_ids: list[uuid.UUID] = []
+    for rid, fname, r in rack_data:
+        for b in range(1, 3):
+            bid = uuid.uuid4()
+            session.add(
+                StorageBox(
+                    id=bid,
+                    rack_id=rid,
+                    box_name=f"{fname[:5]}-R{r}-B{b}",
+                    box_label=f"Box {b} in Rack {r}",
+                    rows=9,
+                    columns=9,
+                    box_type=BoxType.CRYO_81,
+                    box_material=BoxMaterial.CARDBOARD_CRYO,
+                    position_in_rack=b,
+                    created_by=admin_id,
+                )
+            )
+            box_ids.append(bid)
+
+    await session.flush()  # flush boxes before positions (FK)
+
+    # -- Positions --
+    for bid in box_ids:
+        for row in range(1, 10):
+            for col in range(1, 10):
+                pos_id = uuid.uuid4()
+                occupied = (
+                    sample_idx < len(occupied_samples)
+                    and random.random() < 0.05
+                )
+                s_id = None
+                occ_at = None
+                if occupied:
+                    s_id = occupied_samples[sample_idx]
+                    occ_at = _rand_dt(60, 1)
+                    sample_idx += 1
                 session.add(
-                    StorageBox(
-                        id=bid,
-                        rack_id=rid,
-                        box_name=f"{fname[:5]}-R{r}-B{b}",
-                        box_label=f"Box {b} in Rack {r}",
-                        rows=9,
-                        columns=9,
-                        box_type=BoxType.CRYO_81,
-                        box_material=BoxMaterial.CARDBOARD_CRYO,
-                        position_in_rack=b,
-                        created_by=admin_id,
+                    StoragePosition(
+                        id=pos_id,
+                        box_id=bid,
+                        row=row,
+                        column=col,
+                        sample_id=s_id,
+                        occupied_at=occ_at,
                     )
                 )
-
-                # Create all 81 positions, occupy some
-                for row in range(1, 10):
-                    for col in range(1, 10):
-                        pos_id = uuid.uuid4()
-                        occupied = (
-                            sample_idx < len(occupied_samples)
-                            and random.random() < 0.05
-                        )
-                        s_id = None
-                        occ_at = None
-                        if occupied:
-                            s_id = occupied_samples[sample_idx]
-                            occ_at = _rand_dt(60, 1)
-                            sample_idx += 1
-                        session.add(
-                            StoragePosition(
-                                id=pos_id,
-                                box_id=bid,
-                                row=row,
-                                column=col,
-                                sample_id=s_id,
-                                occupied_at=occ_at,
-                            )
-                        )
 
     await session.flush()
     print(f"  [storage] Seeded 5 freezers with racks, boxes, and positions ({sample_idx} occupied).")
@@ -528,6 +551,9 @@ async def seed_field_events(
     field_id = users["field@liims.iisc.ac.in"]
     site_codes = list(site_map.keys())
 
+    # Collect event data for linking participants after flush
+    event_links: list[tuple[uuid.UUID, FieldEventStatus, int | None]] = []
+
     for idx, (name, etype, status, expected, actual) in enumerate(FIELD_EVENTS):
         eid = uuid.uuid4()
         site_code = site_codes[idx % len(site_codes)]
@@ -551,8 +577,12 @@ async def seed_field_events(
                 created_by=field_id,
             )
         )
+        event_links.append((eid, status, actual))
 
-        # Link some participants to completed/in-progress events
+    await session.flush()  # flush field events before linking participants (FK)
+
+    # Link some participants to completed/in-progress events
+    for eid, status, actual in event_links:
         if status != FieldEventStatus.PLANNED:
             n_link = min(actual or 5, len(participants))
             linked = random.sample(participants, n_link)
@@ -649,10 +679,10 @@ async def seed_instruments(
         ("MET-RUN-003", RunType.METABOLOMICS, RunStatus.PLANNED, instrument_ids[2]),
     ]
 
+    # -- Runs --
     run_ids: list[uuid.UUID] = []
-    avail_samples = list(sample_ids)
-    random.shuffle(avail_samples)
-    s_cursor = 0
+    # Track which runs need plates: (run_id, run_name, run_type)
+    runs_needing_plates: list[tuple[uuid.UUID, str, RunType]] = []
 
     for run_name, rtype, rstatus, instr_id in run_configs:
         rid = uuid.uuid4()
@@ -677,43 +707,57 @@ async def seed_instruments(
             )
         )
         run_ids.append(rid)
-
-        # Plate + well assignments for completed and in-progress runs
         if rstatus in (RunStatus.COMPLETED, RunStatus.IN_PROGRESS):
-            plate_id = uuid.uuid4()
+            runs_needing_plates.append((rid, run_name, rtype))
+
+    await session.flush()  # flush runs before plates (FK)
+
+    # -- Plates --
+    avail_samples = list(sample_ids)
+    random.shuffle(avail_samples)
+    s_cursor = 0
+    # Track plates for well assignments: (plate_id, run_id, n_wells)
+    plates_for_wells: list[tuple[uuid.UUID, uuid.UUID, int]] = []
+
+    for rid, run_name, rtype in runs_needing_plates:
+        plate_id = uuid.uuid4()
+        session.add(
+            Plate(
+                id=plate_id,
+                plate_name=f"{run_name}-P1",
+                run_id=rid,
+                qc_template_id=qc_id if rtype == RunType.PROTEOMICS else None,
+                rows=8,
+                columns=12,
+                created_by=tech_id,
+            )
+        )
+        n_wells = random.randint(10, min(20, len(avail_samples) - s_cursor))
+        plates_for_wells.append((plate_id, rid, n_wells))
+
+    await session.flush()  # flush plates before well assignments (FK)
+
+    # -- Well assignments --
+    well_rows = "ABCDEFGH"
+    for plate_id, rid, n_wells in plates_for_wells:
+        for w in range(n_wells):
+            if s_cursor >= len(avail_samples):
+                break
+            wr = well_rows[w // 12]
+            wc = (w % 12) + 1
             session.add(
-                Plate(
-                    id=plate_id,
-                    plate_name=f"{run_name}-P1",
+                InstrumentRunSample(
+                    id=uuid.uuid4(),
                     run_id=rid,
-                    qc_template_id=qc_id if rtype == RunType.PROTEOMICS else None,
-                    rows=8,
-                    columns=12,
-                    created_by=tech_id,
+                    sample_id=avail_samples[s_cursor],
+                    plate_id=plate_id,
+                    well_position=f"{wr}{wc}",
+                    plate_number=1,
+                    sample_order=w + 1,
+                    injection_volume_ul=Decimal("2.00"),
                 )
             )
-
-            # Assign 10-20 samples per plate
-            n_wells = random.randint(10, min(20, len(avail_samples) - s_cursor))
-            well_rows = "ABCDEFGH"
-            for w in range(n_wells):
-                if s_cursor >= len(avail_samples):
-                    break
-                wr = well_rows[w // 12]
-                wc = (w % 12) + 1
-                session.add(
-                    InstrumentRunSample(
-                        id=uuid.uuid4(),
-                        run_id=rid,
-                        sample_id=avail_samples[s_cursor],
-                        plate_id=plate_id,
-                        well_position=f"{wr}{wc}",
-                        plate_number=1,
-                        sample_order=w + 1,
-                        injection_volume_ul=Decimal("2.00"),
-                    )
-                )
-                s_cursor += 1
+            s_cursor += 1
 
     await session.flush()
     print(f"  [instruments] Seeded 5 instruments, 10 runs, plates with well assignments.")
@@ -801,6 +845,7 @@ async def seed_omics(
             qc_summary={"cv_median": 12.3, "missing_pct": 4.2, "proteins_identified": 1200},
         )
     )
+    await session.flush()  # flush result set before individual results (FK)
 
     # Individual results for some features/samples
     proteins = ["ALB", "TNF", "IL6", "CRP", "APOA1", "APOB", "HBA1", "HBB", "TF", "FGA"]
@@ -860,6 +905,7 @@ async def seed_partner_data(
 
     # Canonical tests
     test_ids: dict[str, uuid.UUID] = {}
+    alias_data: list[tuple[uuid.UUID, str, str]] = []  # (test_id, display_name, unit)
     for cname, dname, cat, unit, low, high in CANONICAL_TESTS:
         tid = uuid.uuid4()
         session.add(
@@ -874,8 +920,12 @@ async def seed_partner_data(
             )
         )
         test_ids[cname] = tid
+        alias_data.append((tid, dname, unit))
 
-        # Add aliases for Healthians
+    await session.flush()  # flush canonical tests before aliases (FK)
+
+    # Add aliases for Healthians
+    for tid, dname, unit in alias_data:
         session.add(
             TestNameAlias(
                 id=uuid.uuid4(),
@@ -890,6 +940,7 @@ async def seed_partner_data(
     await session.flush()
 
     # Partner lab imports (2 imports)
+    import_data: list[tuple[uuid.UUID, int]] = []
     for imp_idx in range(2):
         imp_id = uuid.uuid4()
         partner = PartnerName.HEALTHIANS if imp_idx == 0 else PartnerName.LALPATH
@@ -907,10 +958,14 @@ async def seed_partner_data(
                 notes=f"Batch {imp_idx + 1} import from {partner.value}",
             )
         )
+        import_data.append((imp_id, n_records))
 
-        # Generate results
+    await session.flush()  # flush imports before results (FK)
+
+    # Generate results
+    test_names = list(test_ids.keys())
+    for imp_id, n_records in import_data:
         subset = random.sample(participants, min(n_records, len(participants)))
-        test_names = list(test_ids.keys())
         for p_id, p_code, _ in subset:
             for tname in random.sample(test_names, random.randint(3, 8)):
                 low = float(CANONICAL_TESTS[[t[0] for t in CANONICAL_TESTS].index(tname)][4])

@@ -36,7 +36,7 @@ const sampleSchema = z.object({
   initial_volume_ul: z.coerce.number().positive('Volume must be positive').optional(),
   collection_site_id: z.string().uuid('Please select a collection site').optional(),
   notes: z.string().optional(),
-  wave: z.coerce.number().int().min(1).default(1),
+  wave: z.coerce.number().int().min(1).optional().default(1),
 })
 
 type SampleFormData = z.infer<typeof sampleSchema>
@@ -72,7 +72,8 @@ export function SampleRegisterForm() {
     watch,
     setValue,
   } = useForm<SampleFormData>({
-    resolver: zodResolver(sampleSchema),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(sampleSchema) as any,
     defaultValues: {
       wave: 1,
     },
@@ -97,7 +98,7 @@ export function SampleRegisterForm() {
       if (isLiquid && data.initial_volume_ul) {
         payload.initial_volume_ul = data.initial_volume_ul
       }
-      const result = await createMutation.mutateAsync(payload as Parameters<typeof createMutation.mutateAsync>[0])
+      const result = await createMutation.mutateAsync(payload as unknown as Parameters<typeof createMutation.mutateAsync>[0])
       navigate(`/samples/${result.id}`)
     } catch {
       // Error handled by mutation
@@ -120,7 +121,7 @@ export function SampleRegisterForm() {
           <CardTitle>Register Sample</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit as Parameters<typeof handleSubmit>[0])} className="space-y-4">
             {/* Participant search */}
             <div className="space-y-2">
               <Label htmlFor="participant_search">Participant</Label>
