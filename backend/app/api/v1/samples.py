@@ -56,16 +56,18 @@ async def list_samples(
     participant_id: uuid.UUID | None = None,
     sample_type: SampleType | None = None,
     sample_status: SampleStatus | None = None,
+    status: SampleStatus | None = Query(None, description="Alias for sample_status"),
     wave: int | None = None,
     sort: str = "created_at",
     order: str = Query("desc", pattern="^(asc|desc)$"),
 ):
     """List samples with pagination, fuzzy search, and filters."""
+    effective_status = sample_status or status
     svc = SampleService(db)
     samples, total = await svc.list_samples(
         page=page, per_page=per_page, search=search,
         participant_id=participant_id, sample_type=sample_type,
-        status=sample_status, wave=wave, sort=sort, order=order,
+        status=effective_status, wave=wave, sort=sort, order=order,
     )
     return {
         "success": True,

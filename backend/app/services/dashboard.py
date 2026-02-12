@@ -70,17 +70,18 @@ class DashboardService:
 
         # Enrollment rate over last 30 days (by date)
         thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+        day_expr = func.date_trunc("day", Participant.enrollment_date)
         rate_q = (
             select(
-                func.date_trunc("day", Participant.enrollment_date).label("day"),
+                day_expr.label("day"),
                 func.count(Participant.id).label("count"),
             )
             .where(
                 Participant.is_deleted == False,  # noqa: E712
                 Participant.enrollment_date >= thirty_days_ago,
             )
-            .group_by(func.date_trunc("day", Participant.enrollment_date))
-            .order_by(func.date_trunc("day", Participant.enrollment_date).asc())
+            .group_by(day_expr)
+            .order_by(day_expr.asc())
         )
         rate_rows = (await self.db.execute(rate_q)).all()
         enrollment_rate = [
