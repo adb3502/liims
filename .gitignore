@@ -60,3 +60,16 @@ logs/
 htmlcov/
 .coverage
 .pytest_cache/
+
+# Test screenshots and artifacts
+test-*.png
+test1-*.png
+test2-*.png
+test3-*.png
+test4-*.png
+test7-*.png
+test8-*.png
+test-screenshots/
+
+# Design files
+Longevity India - Design Files/
