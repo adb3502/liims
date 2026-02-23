@@ -4,7 +4,6 @@ import { useAuthStore } from '@/stores/auth'
 import { useDashboardOverview, useDashboardEnrollment } from '@/api/dashboard'
 import { StatCard, StatCardSkeleton } from '@/components/ui/stat-card'
 import { ChartCard } from '@/components/ui/chart-card'
-import { PageHeader } from '@/components/ui/page-header'
 import {
   COLORS,
   SITE_COORDINATES,
@@ -34,9 +33,7 @@ import {
   FlaskConical,
   Snowflake,
   ShieldCheck,
-  LayoutDashboard,
   BarChart3,
-  Microscope,
   Calendar,
   ArrowRight,
 } from 'lucide-react'
@@ -322,16 +319,16 @@ export function DashboardPage() {
             />
             <RechartsTooltip
               contentStyle={RECHARTS_THEME.tooltip.contentStyle}
-              formatter={(value: number) => [value.toLocaleString(), 'Participants']}
+              formatter={(value: number | string) => [Number(value).toLocaleString(), 'Participants']}
             />
             <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={28}>
-              {siteData.map((entry, i) => (
+              {siteData.map((entry) => (
                 <Cell key={entry.site_name} fill={entry.color} />
               ))}
               <LabelList
                 dataKey="count"
                 position="right"
-                formatter={(v: number) => v.toLocaleString()}
+                formatter={(v: number | string) => Number(v).toLocaleString()}
                 style={{ fontSize: 11, fill: COLORS.gray600, fontWeight: 500 }}
               />
             </Bar>

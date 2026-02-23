@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useParticipant, useCollectionSites } from '@/api/participants'
+import { useSamples } from '@/api/samples'
+import { usePartnerResults } from '@/api/partner'
 import { useAuth } from '@/hooks/useAuth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,9 +17,21 @@ import {
   TableCell,
 } from '@/components/ui/table'
 import { PageSpinner } from '@/components/ui/spinner'
+import { EmptyState } from '@/components/ui/empty-state'
 import { cn } from '@/lib/utils'
-import { AGE_GROUP_LABELS, type AgeGroup } from '@/types'
-import { ArrowLeft, Edit, Calendar, MapPin, Hash } from 'lucide-react'
+import { AGE_GROUP_LABELS, type AgeGroup, SAMPLE_TYPE_LABELS, SAMPLE_STATUS_LABELS } from '@/types'
+import {
+  ArrowLeft,
+  Edit,
+  Calendar,
+  MapPin,
+  Hash,
+  FlaskConical,
+  Activity,
+  FileText,
+  ClipboardList,
+  AlertTriangle,
+} from 'lucide-react'
 import { ConsentForm } from './ConsentForm'
 
 const CONSENT_TYPE_LABELS: Record<string, string> = {
@@ -26,6 +40,63 @@ const CONSENT_TYPE_LABELS: Record<string, string> = {
   dbs_storage: 'DBS Storage',
   proxy_interview: 'Proxy Interview',
 }
+
+// ──── Clinical data section labels ────────────────────────────────────────
+// The backend clinical_data JSON blob has nested sections. We render
+// whatever keys are present without assuming a fixed schema.
+
+const SECTION_DISPLAY_NAMES: Record<string, string> = {
+  vitals: 'Vitals',
+  anthropometry: 'Anthropometry',
+  scores: 'Questionnaire Scores',
+  blood_pressure: 'Blood Pressure',
+  glucose: 'Glucose',
+  haematology: 'Haematology',
+}
+
+function formatClinicalValue(value: unknown): string {
+  if (value === null || value === undefined) return '—'
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+function ClinicalDataSection({
+  label,
+  data,
+}: {
+  label: string
+  data: Record<string, unknown>
+}) {
+  const entries = Object.entries(data)
+  if (entries.length === 0) return null
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          {label}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-2">
+          {entries.map(([key, value]) => (
+            <div key={key} className="flex flex-col">
+              <dt className="text-xs text-muted-foreground capitalize">
+                {key.replace(/_/g, ' ')}
+              </dt>
+              <dd className="text-sm font-medium text-foreground font-mono">
+                {formatClinicalValue(value)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ──── Main component ──────────────────────────────────────────────────────
 
 export function ParticipantDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -37,14 +108,20 @@ export function ParticipantDetailPage() {
   const { data: participant, isLoading, isError } = useParticipant(id!)
   const { data: sites } = useCollectionSites(true)
 
+  // Lazy-load samples and lab results only when tab is active
+  const { data: samplesData, isLoading: samplesLoading } = useSamples(
+    activeTab === 'samples' ? { participant_id: id!, per_page: 100 } : {}
+  )
+  const { data: partnerResults, isLoading: labResultsLoading } = usePartnerResults(
+    activeTab === 'lab-results' ? (id ?? '') : ''
+  )
+
   if (isLoading) return <PageSpinner />
 
   if (isError || !participant) {
     return (
       <div className="rounded-lg border border-danger/20 bg-danger/5 p-8 text-center">
-        <p className="text-sm text-danger">
-          Failed to load participant details.
-        </p>
+        <p className="text-sm text-danger">Failed to load participant details.</p>
         <Button variant="outline" className="mt-4" onClick={() => navigate('/participants')}>
           Back to list
         </Button>
@@ -58,13 +135,19 @@ export function ParticipantDetailPage() {
     '---'
 
   const pct = Number(participant.completion_pct) || 0
-
   const canEdit = hasRole('super_admin', 'lab_manager', 'data_entry')
   const canAddConsent = hasRole('super_admin', 'lab_manager', 'data_entry', 'field_coordinator')
 
+  // Clinical data — it's stored as a JSONB blob; may be null
+  const clinicalData = (participant as unknown as { clinical_data?: Record<string, unknown> | null })
+    .clinical_data
+
+  // Count abnormal lab results for badge
+  const abnormalCount = partnerResults?.filter((r) => r.is_abnormal).length ?? 0
+
   return (
     <div>
-      {/* Back button */}
+      {/* Back */}
       <button
         onClick={() => navigate('/participants')}
         className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4 cursor-pointer"
@@ -104,14 +187,31 @@ export function ParticipantDetailPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="clinical">
+            Clinical Data
+          </TabsTrigger>
+          <TabsTrigger value="lab-results">
+            Lab Results
+            {abnormalCount > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-danger/15 text-danger text-xs font-bold min-w-[18px] px-1">
+                {abnormalCount}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="samples">
+            Samples ({samplesData?.data.length ?? participant.sample_counts
+              ? Object.values(participant.sample_counts ?? {}).reduce(
+                  (a: number, b) => a + (b as number),
+                  0
+                )
+              : 0})
+          </TabsTrigger>
           <TabsTrigger value="consents">
             Consents ({participant.consents?.length ?? 0})
           </TabsTrigger>
-          <TabsTrigger value="samples">Samples</TabsTrigger>
-          <TabsTrigger value="timeline">Timeline</TabsTrigger>
         </TabsList>
 
-        {/* Overview Tab */}
+        {/* ── Overview Tab ──────────────────────────────────────────────── */}
         <TabsContent value="overview">
           <div className="grid gap-4 md:grid-cols-2 mt-4">
             <Card>
@@ -161,12 +261,16 @@ export function ParticipantDetailPage() {
                         pct >= 70 && 'bg-success'
                       )}
                       style={{ width: `${Math.min(100, pct)}%` }}
+                      role="progressbar"
+                      aria-valuenow={pct}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label={`Completion: ${pct}%`}
                     />
                   </div>
                   <span className="text-lg font-bold">{pct}%</span>
                 </div>
 
-                {/* Sample counts */}
                 {participant.sample_counts &&
                   Object.keys(participant.sample_counts).length > 0 && (
                     <div className="space-y-2">
@@ -174,21 +278,15 @@ export function ParticipantDetailPage() {
                         Sample Counts by Type
                       </p>
                       <div className="grid grid-cols-2 gap-2">
-                        {Object.entries(participant.sample_counts).map(
-                          ([type, count]) => (
-                            <div
-                              key={type}
-                              className="flex items-center justify-between rounded-md bg-muted px-3 py-1.5"
-                            >
-                              <span className="text-xs capitalize">
-                                {type.replace('_', ' ')}
-                              </span>
-                              <span className="text-xs font-mono font-medium">
-                                {count as number}
-                              </span>
-                            </div>
-                          )
-                        )}
+                        {Object.entries(participant.sample_counts).map(([type, count]) => (
+                          <div
+                            key={type}
+                            className="flex items-center justify-between rounded-md bg-muted px-3 py-1.5"
+                          >
+                            <span className="text-xs capitalize">{type.replace('_', ' ')}</span>
+                            <span className="text-xs font-mono font-medium">{count as number}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -197,19 +295,214 @@ export function ParticipantDetailPage() {
           </div>
         </TabsContent>
 
-        {/* Consents Tab */}
+        {/* ── Clinical Data Tab ─────────────────────────────────────────── */}
+        <TabsContent value="clinical">
+          <div className="mt-4">
+            {!clinicalData ? (
+              <EmptyState
+                icon={<ClipboardList className="h-6 w-6" />}
+                title="No clinical data recorded"
+                description="Clinical metadata such as vitals, anthropometry, and questionnaire scores will appear here once collected."
+              />
+            ) : Object.keys(clinicalData).length === 0 ? (
+              <EmptyState
+                icon={<ClipboardList className="h-6 w-6" />}
+                title="Clinical data is empty"
+                description="The clinical data record exists but contains no values yet."
+              />
+            ) : (
+              <div className="space-y-4">
+                {Object.entries(clinicalData).map(([section, sectionData]) => {
+                  const label =
+                    SECTION_DISPLAY_NAMES[section] ??
+                    section.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+
+                  // Each section is expected to be a flat object of key→value pairs.
+                  // If it's a primitive, wrap it.
+                  const data: Record<string, unknown> =
+                    typeof sectionData === 'object' && sectionData !== null
+                      ? (sectionData as Record<string, unknown>)
+                      : { value: sectionData }
+
+                  return (
+                    <ClinicalDataSection key={section} label={label} data={data} />
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* ── Lab Results Tab ───────────────────────────────────────────── */}
+        <TabsContent value="lab-results">
+          <div className="mt-4">
+            {labResultsLoading ? (
+              <PageSpinner />
+            ) : !partnerResults || partnerResults.length === 0 ? (
+              <EmptyState
+                icon={<Activity className="h-6 w-6" />}
+                title="No lab results yet"
+                description="Partner lab results (Healthians, 1mg, Lal Path Labs, DecodeAge) will appear here once imported."
+              />
+            ) : (
+              <>
+                {abnormalCount > 0 && (
+                  <div className="flex items-center gap-2 mb-4 rounded-lg border border-danger/20 bg-danger/5 px-4 py-3">
+                    <AlertTriangle className="h-4 w-4 text-danger flex-shrink-0" />
+                    <p className="text-sm text-danger">
+                      <span className="font-semibold">{abnormalCount}</span> abnormal result
+                      {abnormalCount !== 1 ? 's' : ''} flagged for review.
+                    </p>
+                  </div>
+                )}
+                <div className="rounded-lg border border-border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Test Name</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Value</TableHead>
+                        <TableHead>Unit</TableHead>
+                        <TableHead>Reference Range</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {partnerResults.map((result) => (
+                        <TableRow
+                          key={result.id}
+                          className={cn(result.is_abnormal && 'bg-danger/5')}
+                        >
+                          <TableCell className="font-medium">
+                            {result.canonical_test_name ?? result.test_name_raw ?? '—'}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {result.test_date
+                              ? new Date(result.test_date).toLocaleDateString()
+                              : '—'}
+                          </TableCell>
+                          <TableCell
+                            className={cn(
+                              'font-mono text-sm font-semibold',
+                              result.is_abnormal && 'text-danger'
+                            )}
+                          >
+                            {result.test_value ?? '—'}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {result.test_unit ?? '—'}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {result.reference_range ?? '—'}
+                          </TableCell>
+                          <TableCell>
+                            {result.is_abnormal === null ? (
+                              <span className="text-xs text-muted-foreground">N/A</span>
+                            ) : result.is_abnormal ? (
+                              <Badge variant="destructive">Abnormal</Badge>
+                            ) : (
+                              <Badge variant="success">Normal</Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* ── Samples Tab ───────────────────────────────────────────────── */}
+        <TabsContent value="samples">
+          <div className="mt-4">
+            {samplesLoading ? (
+              <PageSpinner />
+            ) : !samplesData?.data.length ? (
+              <EmptyState
+                icon={<FlaskConical className="h-6 w-6" />}
+                title="No samples registered"
+                description="Samples registered for this participant will appear here."
+              />
+            ) : (
+              <div className="rounded-lg border border-border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Sample Code</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Volume (µL)</TableHead>
+                      <TableHead>Collected</TableHead>
+                      <TableHead>Wave</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {samplesData.data.map((sample) => (
+                      <TableRow
+                        key={sample.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => navigate(`/samples/${sample.id}`)}
+                      >
+                        <TableCell>
+                          <span className="font-mono text-sm font-medium text-primary">
+                            {sample.sample_code}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {SAMPLE_TYPE_LABELS[sample.sample_type] ?? sample.sample_type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              sample.status === 'discarded' || sample.status === 'depleted'
+                                ? 'destructive'
+                                : sample.status === 'stored'
+                                ? 'success'
+                                : 'secondary'
+                            }
+                          >
+                            {SAMPLE_STATUS_LABELS[sample.status] ?? sample.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm font-mono">
+                          {sample.remaining_volume_ul != null
+                            ? `${sample.remaining_volume_ul} / ${sample.initial_volume_ul ?? '?'}`
+                            : sample.initial_volume_ul != null
+                            ? sample.initial_volume_ul
+                            : '—'}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {sample.collection_datetime
+                            ? new Date(sample.collection_datetime).toLocaleDateString()
+                            : '—'}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {sample.wave}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* ── Consents Tab ──────────────────────────────────────────────── */}
         <TabsContent value="consents">
           <div className="mt-4">
             {canAddConsent && (
               <div className="mb-4">
-                <Button onClick={() => setShowConsentForm(true)}>
-                  Add Consent
-                </Button>
+                <Button onClick={() => setShowConsentForm(true)}>Add Consent</Button>
               </div>
             )}
 
             {participant.consents && participant.consents.length > 0 ? (
-              <div className="rounded-lg border border-border">
+              <div className="rounded-lg border border-border overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -235,9 +528,7 @@ export function ParticipantDetailPage() {
                         <TableCell className="text-sm text-muted-foreground">
                           {new Date(c.consent_date).toLocaleDateString()}
                         </TableCell>
-                        <TableCell className="text-sm">
-                          {c.is_proxy ? 'Yes' : 'No'}
-                        </TableCell>
+                        <TableCell className="text-sm">{c.is_proxy ? 'Yes' : 'No'}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {c.witness_name ?? '---'}
                         </TableCell>
@@ -256,38 +547,17 @@ export function ParticipantDetailPage() {
                 </Table>
               </div>
             ) : (
-              <div className="rounded-lg border border-dashed border-border p-8 text-center">
-                <p className="text-sm text-muted-foreground">
-                  No consents recorded yet.
-                </p>
-              </div>
+              <EmptyState
+                icon={<FileText className="h-6 w-6" />}
+                title="No consents recorded"
+                description="Consent records for this participant will appear here."
+              />
             )}
           </div>
 
           {showConsentForm && (
-            <ConsentForm
-              participantId={id!}
-              onClose={() => setShowConsentForm(false)}
-            />
+            <ConsentForm participantId={id!} onClose={() => setShowConsentForm(false)} />
           )}
-        </TabsContent>
-
-        {/* Samples Tab */}
-        <TabsContent value="samples">
-          <div className="mt-4 rounded-lg border border-dashed border-border p-12 text-center">
-            <p className="text-sm text-muted-foreground">
-              Sample data will be displayed here once the sample list API hook is connected.
-            </p>
-          </div>
-        </TabsContent>
-
-        {/* Timeline Tab */}
-        <TabsContent value="timeline">
-          <div className="mt-4 rounded-lg border border-dashed border-border p-12 text-center">
-            <p className="text-sm text-muted-foreground">
-              Activity timeline will appear here when audit log integration is complete.
-            </p>
-          </div>
         </TabsContent>
       </Tabs>
     </div>
