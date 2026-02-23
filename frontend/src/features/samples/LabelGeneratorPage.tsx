@@ -44,6 +44,7 @@ function parseCodesFromText(text: string): string[] {
 
 export function LabelGeneratorPage() {
   const [inputMethod, setInputMethod] = useState<InputMethod>('paste')
+  const [outputFormat, setOutputFormat] = useState<'pdf' | 'docx'>('pdf')
   const [pastedText, setPastedText] = useState('')
   const [dateStr, setDateStr] = useState('')
   const [codes, setCodes] = useState<string[]>([])
@@ -150,22 +151,32 @@ export function LabelGeneratorPage() {
         {
           participant_codes: codes,
           date_str: dateStr,
+          output_format: outputFormat,
         },
         { responseType: 'blob' }
       )
+
+      // Extract filename from Content-Disposition header or build default
+      const disposition = response.headers['content-disposition'] || ''
+      const filenameMatch = disposition.match(/filename="?([^";\n]+)"?/)
+      const suffix = dateStr ? `_${dateStr}` : ''
+      const filename = filenameMatch?.[1] || `bharat_labels${suffix}.zip`
 
       const blob = new Blob([response.data], { type: 'application/zip' })
       const url = URL.createObjectURL(blob)
       setGeneratedFile(url)
 
-      // Auto-download
-      const suffix = dateStr ? `_${dateStr}` : ''
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `bharat_labels${suffix}.zip`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
+      // Trigger download using link click
+      const link = document.createElement('a')
+      link.style.display = 'none'
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      // Cleanup after a delay to ensure download starts
+      setTimeout(() => {
+        document.body.removeChild(link)
+      }, 100)
     } catch {
       setErrors(['Failed to generate labels. Please try again.'])
     } finally {
@@ -322,6 +333,27 @@ export function LabelGeneratorPage() {
                 />
               </div>
 
+              {/* Output format */}
+              <div className="space-y-1.5">
+                <Label>Output format</Label>
+                <div className="flex gap-2">
+                  {(['pdf', 'docx'] as const).map((fmt) => (
+                    <button
+                      key={fmt}
+                      onClick={() => setOutputFormat(fmt)}
+                      className={cn(
+                        'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                        outputFormat === fmt
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                      )}
+                    >
+                      {fmt.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Errors */}
               {errors.length > 0 && (
                 <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm text-destructive">
@@ -429,7 +461,7 @@ export function LabelGeneratorPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground space-y-2">
-              <p>Downloads a ZIP containing 6 Word (.docx) files, one per label group.</p>
+              <p>Downloads a ZIP containing 6 files (PDF or Word), one per label group.</p>
               <p>Each file is formatted for A4 paper with precise label positioning.</p>
               <p>
                 <strong>B-participants</strong> (e.g. 1B-001) get an extra H2 label in the

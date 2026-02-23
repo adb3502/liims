@@ -1,21 +1,27 @@
 """
 Label generator for BHARAT Study participants.
 
-Generates A4-formatted Word documents with participant labels across 5 groups:
+Generates A4-formatted Word documents with participant labels across 6 groups:
   - Cryovial (P1-P5): 5 per row, 17 rows/page, with row gutters
+  - Urine (U1): 5 per row, same cryo layout
   - Epigenetics (E1-E4): 4 per row, 21 rows/page
   - Samples (CS1, R1, H1, +H2 for B-participants): 4 per row
   - EDTA (EDTA1-EDTA4): 4 per row
   - SST/Fl/Blood (SST1, SST2, Fl1, B1): 4 per row
 
 Adapted from the original standalone label_generator.py script.
-Will transition to thermal printing in the future.
+Uses LibreOffice headless for docx→pdf conversion.
 """
 
 import io
+import logging
 import re
+import subprocess
+import tempfile
 import zipfile
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from docx import Document
 from docx.enum.table import WD_ALIGN_VERTICAL, WD_ROW_HEIGHT_RULE
@@ -262,38 +268,185 @@ def _build_docx(labels: list[str], config: dict) -> io.BytesIO:
     return buf
 
 
+PDF_WORKER_DIR = Path("/data/pdf-worker")
+
+
+def _convert_docx_files_to_pdf(
+    docx_files: dict[str, bytes],
+    timeout_seconds: int = 120,
+) -> dict[str, bytes]:
+    """
+    Convert .docx files to PDF via the Windows worker (MS Word COM).
+
+    Falls back to LibreOffice if the worker directory is not available
+    (e.g. running outside Docker or worker not set up).
+
+    Args:
+        docx_files: dict of {filename: docx_bytes}
+
+    Returns:
+        dict of {filename_with_pdf_ext: pdf_bytes}
+    """
+    worker_dir = PDF_WORKER_DIR if PDF_WORKER_DIR.exists() else None
+
+    if worker_dir:
+        return _convert_via_word_worker(docx_files, worker_dir, timeout_seconds)
+    else:
+        logger.info("PDF worker dir not found, falling back to LibreOffice")
+        return _convert_via_libreoffice(docx_files)
+
+
+def _convert_via_word_worker(
+    docx_files: dict[str, bytes],
+    worker_dir: Path,
+    timeout_seconds: int,
+) -> dict[str, bytes]:
+    """Send docx files to the Windows Word worker for conversion."""
+    import uuid as _uuid
+    import json
+    import time as _time
+
+    request_id = str(_uuid.uuid4())[:8]
+    request_dir = worker_dir / request_id
+    request_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write docx files
+    filenames = []
+    for name, data in docx_files.items():
+        (request_dir / name).write_bytes(data)
+        filenames.append(name)
+
+    # Write request file (signals the worker)
+    request_file = worker_dir / f"{request_id}.request.json"
+    request_file.write_text(json.dumps({
+        "request_id": request_id,
+        "files": filenames,
+    }))
+
+    logger.info("PDF request %s: %d files, waiting for worker...", request_id, len(filenames))
+
+    # Wait for worker to finish
+    done_file = request_dir / "done.json"
+    for _ in range(timeout_seconds * 2):  # Check every 0.5s
+        if done_file.exists():
+            break
+        _time.sleep(0.5)
+    else:
+        # Timeout — clean up and fall back to LibreOffice
+        logger.warning("PDF worker timeout for request %s, falling back to LibreOffice", request_id)
+        _cleanup_request_dir(request_dir, request_file)
+        return _convert_via_libreoffice(docx_files)
+
+    # Read PDFs
+    results: dict[str, bytes] = {}
+    for name in filenames:
+        pdf_name = name.replace(".docx", ".pdf")
+        pdf_path = request_dir / pdf_name
+        if pdf_path.exists():
+            results[pdf_name] = pdf_path.read_bytes()
+        else:
+            logger.warning("PDF not found for %s", name)
+
+    # Clean up
+    _cleanup_request_dir(request_dir)
+    return results
+
+
+def _cleanup_request_dir(request_dir: Path, request_file: Path | None = None) -> None:
+    """Remove request directory and request file."""
+    try:
+        if request_file and request_file.exists():
+            request_file.unlink()
+        if request_dir.exists():
+            for f in request_dir.iterdir():
+                f.unlink()
+            request_dir.rmdir()
+    except Exception as e:
+        logger.warning("Cleanup error: %s", e)
+
+
+def _convert_via_libreoffice(docx_files: dict[str, bytes]) -> dict[str, bytes]:
+    """Fallback: convert docx to PDF using LibreOffice headless."""
+    results: dict[str, bytes] = {}
+
+    for name, data in docx_files.items():
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            docx_path = tmpdir_path / "input.docx"
+            docx_path.write_bytes(data)
+
+            result = subprocess.run(
+                [
+                    "libreoffice",
+                    "--headless",
+                    "--convert-to", "pdf",
+                    "--outdir", str(tmpdir_path),
+                    str(docx_path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+
+            pdf_path = tmpdir_path / "input.pdf"
+            if result.returncode == 0 and pdf_path.exists():
+                pdf_name = name.replace(".docx", ".pdf")
+                results[pdf_name] = pdf_path.read_bytes()
+            else:
+                logger.error("LibreOffice failed for %s: %s", name, result.stderr)
+
+    return results
+
+
 def generate_label_zip(
     participant_codes: list[str],
     date_str: str = "",
+    output_format: str = "docx",
 ) -> io.BytesIO:
     """
-    Generate all 5 label documents and return as a ZIP file in memory.
+    Generate all 6 label documents and return as a ZIP file in memory.
 
     Args:
         participant_codes: List of participant codes (e.g. ["1A-001", "2B-045"])
         date_str: Optional date string appended to filenames
+        output_format: "docx" or "pdf"
 
     Returns:
-        BytesIO containing a ZIP with 5 .docx files
+        BytesIO containing a ZIP with 6 files
     """
     codes = sorted(participant_codes)
     collections = _create_label_collections(codes)
     suffix = f"_{date_str}" if date_str else ""
+    ext = output_format if output_format in ("docx", "pdf") else "docx"
+
+    # Build all docx buffers first
+    group_order = [
+        ("cryovial", CRYO_CONFIG),
+        ("urine", CRYO_CONFIG),
+        ("epigenetics", NORMAL_CONFIG),
+        ("samples", NORMAL_CONFIG),
+        ("edta", NORMAL_CONFIG),
+        ("sst_fl_blood", NORMAL_CONFIG),
+    ]
+
+    # Build all docx buffers
+    docx_outputs: dict[str, bytes] = {}
+    for group_name, config in group_order:
+        docx_buf = _build_docx(collections[group_name], config)
+        docx_name = f"labels_{group_name}{suffix}.docx"
+        docx_outputs[docx_name] = docx_buf.read()
+
+    # Convert to PDF if requested
+    if ext == "pdf":
+        pdf_outputs = _convert_docx_files_to_pdf(docx_outputs)
+        files_to_zip = pdf_outputs
+    else:
+        files_to_zip = docx_outputs
 
     zip_buf = io.BytesIO()
     with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        # Cryovial labels (5 per row)
-        cryo_buf = _build_docx(collections["cryovial"], CRYO_CONFIG)
-        zf.writestr(f"labels_cryovial{suffix}.docx", cryo_buf.read())
-
-        # Urine labels (5 per row, same cryo layout)
-        urine_buf = _build_docx(collections["urine"], CRYO_CONFIG)
-        zf.writestr(f"labels_urine{suffix}.docx", urine_buf.read())
-
-        # Normal labels (4 per row each)
-        for group_name in ["epigenetics", "samples", "edta", "sst_fl_blood"]:
-            buf = _build_docx(collections[group_name], NORMAL_CONFIG)
-            zf.writestr(f"labels_{group_name}{suffix}.docx", buf.read())
+        for filename, data in files_to_zip.items():
+            zf.writestr(filename, data)
 
     zip_buf.seek(0)
     return zip_buf

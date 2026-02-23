@@ -38,11 +38,13 @@ async def generate_labels_zip(
     - labels_sst_fl_blood.docx (SST1, SST2, Fl1, B1)
     """
     try:
-        zip_buf = generate_label_zip(body.participant_codes, body.date_str)
+        zip_buf = generate_label_zip(
+            body.participant_codes, body.date_str, body.output_format
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to generate labels. Please try again.",
+            detail=f"Failed to generate labels: {e}",
         )
 
     suffix = f"_{body.date_str}" if body.date_str else ""

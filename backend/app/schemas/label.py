@@ -16,6 +16,11 @@ class LabelGenerateRequest(BaseModel):
         default="",
         description="Optional date string appended to filenames",
     )
+    output_format: str = Field(
+        default="docx",
+        pattern=r"^(docx|pdf)$",
+        description="Output format: docx or pdf",
+    )
 
 
 class SingleGroupLabelRequest(BaseModel):

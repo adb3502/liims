@@ -1,6 +1,6 @@
 FROM python:3.11-slim AS base
 
-# System dependencies
+# System dependencies (includes LibreOffice for docx→pdf conversion)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        build-essential \
@@ -10,6 +10,9 @@ RUN apt-get update \
        libffi-dev \
        libcairo2 \
        curl \
+       libreoffice-writer-nogui \
+       fonts-liberation \
+       fonts-dejavu-core \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

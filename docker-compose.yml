@@ -50,6 +50,7 @@ services:
     volumes:
       - ${NAS_MOUNT_PATH:-./data/nas}:/data/nas:ro
       - file_store:/data/file_store
+      - ./data/pdf-worker:/data/pdf-worker
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 10s
