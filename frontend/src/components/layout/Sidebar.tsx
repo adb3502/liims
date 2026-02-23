@@ -14,6 +14,8 @@ import {
   Shield,
   ChevronLeft,
   ChevronRight,
+  FileText,
+  Dna,
 } from 'lucide-react'
 
 interface NavItem {
@@ -69,13 +71,7 @@ const navigation: NavItem[] = [
     label: 'Field Operations',
     path: '/field-ops',
     icon: <MapPin className="h-5 w-5" />,
-    roles: [
-      'super_admin',
-      'lab_manager',
-      'field_coordinator',
-      'data_entry',
-      'pi_researcher',
-    ],
+    roles: ['super_admin', 'lab_manager', 'field_coordinator', 'data_entry', 'pi_researcher'],
     children: [
       { label: 'Events', path: '/field-ops/events' },
       { label: 'Conflicts', path: '/field-ops/conflicts' },
@@ -108,17 +104,22 @@ const navigation: NavItem[] = [
     ],
   },
   {
-    label: 'Reports',
+    label: 'Analytics',
     path: '/reports',
     icon: <BarChart3 className="h-5 w-5" />,
     children: [
-      { label: 'Enrollment', path: '/reports/enrollment' },
+      { label: 'Overview', path: '/reports/enrollment' },
+      { label: 'BHARAT Data', path: '/reports/data-explorer' },
       { label: 'Inventory', path: '/reports/inventory' },
-      { label: 'Sites', path: '/reports/sites' },
-      { label: 'Data Availability', path: '/reports/data-availability' },
       { label: 'Quality', path: '/reports/quality' },
+      { label: 'Sites', path: '/reports/sites' },
       { label: 'Query Builder', path: '/reports/query-builder' },
     ],
+  },
+  {
+    label: 'Protocols',
+    path: '/protocols',
+    icon: <FileText className="h-5 w-5" />,
   },
   {
     label: 'Admin',
@@ -127,7 +128,6 @@ const navigation: NavItem[] = [
     roles: ['super_admin', 'lab_manager'],
     children: [
       { label: 'Users', path: '/admin/users' },
-      { label: 'Read Replica', path: '/admin/replica' },
       { label: 'Audit Logs', path: '/admin/audit-logs' },
       { label: 'Access Logs', path: '/admin/access-logs' },
       { label: 'File Manager', path: '/admin/files' },
@@ -161,42 +161,39 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'flex h-screen flex-col bg-sidebar text-sidebar-foreground transition-[width] duration-200',
-        collapsed ? 'w-16' : 'w-64'
+        'flex h-screen flex-col transition-[width] duration-300 ease-in-out',
+        collapsed ? 'w-[68px]' : 'w-64'
       )}
+      style={{
+        background: 'linear-gradient(180deg, #0F172A 0%, #1A1F3A 50%, #162044 100%)',
+      }}
     >
       {/* Logo area */}
-      <div className="flex h-16 items-center px-4 border-b border-sidebar-muted">
+      <div className="flex h-16 items-center px-4 border-b border-white/[0.06]">
         {!collapsed ? (
-          <div className="flex items-center gap-2.5">
-            <img
-              src="/logo-icon.svg"
-              alt=""
-              className="h-7 w-7"
-              onError={(e) => {
-                // Fallback if logo not yet available
-                e.currentTarget.style.display = 'none'
-              }}
-            />
-            <span className="text-lg font-bold tracking-tight text-white">
-              LIIMS
-            </span>
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary">
+              <Dna className="h-4.5 w-4.5 text-white" />
+            </div>
+            <div>
+              <span className="text-[15px] font-bold tracking-tight text-white">
+                LIIMS
+              </span>
+              <span className="block text-[9px] font-medium tracking-[0.15em] text-white/40 uppercase -mt-0.5">
+                Longevity India
+              </span>
+            </div>
           </div>
         ) : (
-          <img
-            src="/logo-icon.svg"
-            alt="LIIMS"
-            className="mx-auto h-7 w-7"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none'
-            }}
-          />
+          <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary">
+            <Dna className="h-4.5 w-4.5 text-white" />
+          </div>
         )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-4">
-        <ul className="space-y-1 px-2">
+      <nav className="flex-1 overflow-y-auto py-3 px-2">
+        <ul className="space-y-0.5">
           {navigation.map((item) => {
             if (!hasAccess(item.roles)) return null
 
@@ -208,19 +205,27 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 <NavLink
                   to={item.children ? item.children[0].path : item.path}
                   className={cn(
-                    'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                    'group flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-150',
                     active
-                      ? 'bg-sidebar-accent text-white'
-                      : 'text-sidebar-foreground/70 hover:bg-sidebar-muted hover:text-white'
+                      ? 'bg-white/[0.1] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]'
+                      : 'text-white/50 hover:bg-white/[0.05] hover:text-white/80'
                   )}
                   title={collapsed ? item.label : undefined}
                 >
-                  {item.icon}
+                  <span className={cn(
+                    'flex-shrink-0 transition-colors',
+                    active ? 'text-[#5B93FF]' : 'text-white/40 group-hover:text-white/60'
+                  )}>
+                    {item.icon}
+                  </span>
                   {!collapsed && <span>{item.label}</span>}
+                  {active && !collapsed && (
+                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#5B93FF]" />
+                  )}
                 </NavLink>
 
                 {showChildren && (
-                  <ul className="ml-8 mt-1 space-y-0.5">
+                  <ul className="ml-[26px] mt-0.5 space-y-0.5 border-l border-white/[0.06] pl-3">
                     {item.children!.map((child) => {
                       if (!hasAccess(child.roles)) return null
                       return (
@@ -229,10 +234,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                             to={child.path}
                             className={({ isActive: linkActive }) =>
                               cn(
-                                'block rounded-md px-3 py-1.5 text-sm transition-colors',
+                                'block rounded-md px-2.5 py-1.5 text-[12px] transition-all duration-150',
                                 linkActive
-                                  ? 'font-medium text-white'
-                                  : 'text-sidebar-foreground/60 hover:text-white'
+                                  ? 'font-medium text-white bg-white/[0.06]'
+                                  : 'text-white/40 hover:text-white/70 hover:bg-white/[0.03]'
                               )
                             }
                           >
@@ -249,11 +254,24 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </ul>
       </nav>
 
-      {/* Collapse toggle */}
-      <div className="border-t border-sidebar-muted p-2">
+      {/* User section + collapse */}
+      <div className="border-t border-white/[0.06] p-2">
+        {!collapsed && user && (
+          <div className="px-3 py-2 mb-1">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-primary text-[10px] font-bold text-white">
+                {user.full_name?.charAt(0)?.toUpperCase() || 'U'}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-white/80 truncate">{user.full_name}</p>
+                <p className="text-[10px] text-white/30 truncate">{user.email}</p>
+              </div>
+            </div>
+          </div>
+        )}
         <button
           onClick={onToggle}
-          className="flex w-full items-center justify-center rounded-md p-2 text-sidebar-foreground/60 hover:bg-sidebar-muted hover:text-white transition-colors cursor-pointer"
+          className="flex w-full items-center justify-center rounded-lg p-2 text-white/30 hover:bg-white/[0.05] hover:text-white/60 transition-all cursor-pointer"
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? (

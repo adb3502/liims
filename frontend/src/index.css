@@ -1,74 +1,90 @@
 @import "tailwindcss";
 
 @theme {
-  /* Primary */
+  /* ──── Brand ──── */
   --color-primary: #3674F6;
   --color-primary-foreground: #ffffff;
+  --color-primary-light: #5B93FF;
+  --color-primary-dark: #2558CC;
   --color-primary-teal: #03B6D9;
+  --color-teal: #03B6D9;
+  --color-teal-light: #22D3EE;
+  --color-teal-dark: #0891B2;
 
-  /* Semantic */
+  /* ──── Semantic ──── */
   --color-success: #059669;
+  --color-success-light: #10B981;
   --color-warning: #D97706;
+  --color-warning-light: #F59E0B;
   --color-danger: #DC2626;
+  --color-danger-light: #EF4444;
+  --color-info: #3B82F6;
 
-  /* Supporting */
+  /* ──── Supporting ──── */
   --color-light-blue: #D0E4FF;
-  --color-lavender: #EDF0F5;
-  --color-light-gray: #E3E3E3;
+  --color-lavender: #F0F4FF;
+  --color-light-gray: #F1F5F9;
 
-  /* Surface */
-  --color-background: #ffffff;
+  /* ──── Surface ──── */
+  --color-background: #F8FAFC;
   --color-foreground: #0f172a;
-  --color-muted: #EDF0F5;
+  --color-muted: #F1F5F9;
   --color-muted-foreground: #64748b;
-  --color-border: #E3E3E3;
-  --color-input: #E3E3E3;
+  --color-border: #E2E8F0;
+  --color-input: #E2E8F0;
   --color-ring: #3674F6;
 
-  /* Card / Popover */
+  /* ──── Card / Popover ──── */
   --color-card: #ffffff;
   --color-card-foreground: #0f172a;
   --color-popover: #ffffff;
   --color-popover-foreground: #0f172a;
 
-  /* Accent */
-  --color-accent: #EDF0F5;
+  /* ──── Accent ──── */
+  --color-accent: #F0F4FF;
   --color-accent-foreground: #0f172a;
 
-  /* Destructive */
+  /* ──── Destructive ──── */
   --color-destructive: #DC2626;
   --color-destructive-foreground: #ffffff;
 
-  /* Sidebar (dark) */
-  --color-sidebar: #1E293B;
-  --color-sidebar-foreground: #e2e8f0;
-  --color-sidebar-muted: #334155;
+  /* ──── Sidebar (dark) ──── */
+  --color-sidebar: #0F172A;
+  --color-sidebar-foreground: #CBD5E1;
+  --color-sidebar-muted: #1E293B;
   --color-sidebar-accent: #3674F6;
 
-  /* Typography */
-  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  /* ──── Typography ──── */
+  --font-sans: "Red Hat Display", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  /* Radius */
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
+  /* ──── Radius ──── */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
 
-  /* Animations */
-  --animate-slideIn: slideIn 0.2s ease-out;
-  --animate-fadeIn: fadeIn 0.15s ease-out;
-  --animate-scaleIn: scaleIn 0.15s ease-out;
+  /* ──── Shadows ──── */
+  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover: 0 4px 12px -2px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --shadow-glow: 0 0 20px rgba(54, 116, 246, 0.15);
+
+  /* ──── Animations ──── */
+  --animate-slideIn: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-fadeIn: fadeIn 0.2s ease-out;
+  --animate-scaleIn: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slideUp: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-countUp: countUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-shimmer: shimmer 2s linear infinite;
+  --animate-pulse-soft: pulse-soft 2s ease-in-out infinite;
 }
 
+/* ──── Keyframes ──── */
+
 @keyframes slideIn {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
 }
 
 @keyframes fadeIn {
@@ -77,17 +93,32 @@
 }
 
 @keyframes scaleIn {
-  from {
-    transform: scale(0.95);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }
 
-/* Base styles */
+@keyframes slideUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes countUp {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* ──── Base ──── */
+
 body {
   margin: 0;
   font-family: var(--font-sans);
@@ -97,17 +128,66 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Monospace for codes and IDs */
+/* ──── Utilities ──── */
+
 .font-mono {
   font-family: var(--font-mono);
 }
 
-/* Gradient utility for primary buttons / hero elements */
+/* Brand gradient */
 .bg-gradient-primary {
   background: linear-gradient(135deg, #3674F6 0%, #03B6D9 100%);
 }
 
-/* Line clamp utility */
+.bg-gradient-primary-subtle {
+  background: linear-gradient(135deg, rgba(54, 116, 246, 0.08) 0%, rgba(3, 182, 217, 0.08) 100%);
+}
+
+.text-gradient-primary {
+  background: linear-gradient(135deg, #3674F6 0%, #03B6D9 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glassmorphism card */
+.glass-card {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: var(--shadow-card);
+}
+
+.glass-card:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* Stat card accent stripe */
+.stat-stripe {
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-stripe::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+}
+
+/* Loading skeleton shimmer */
+.skeleton {
+  background: linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 50%, #F1F5F9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+  border-radius: var(--radius-md);
+}
+
+/* Line clamp */
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -115,20 +195,127 @@ body {
   overflow: hidden;
 }
 
-/* Custom scrollbar */
-.overflow-y-auto::-webkit-scrollbar {
-  width: 4px;
+/* ──── Scrollbar ──── */
+
+.overflow-y-auto::-webkit-scrollbar,
+.overflow-x-auto::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-.overflow-y-auto::-webkit-scrollbar-track {
+.overflow-y-auto::-webkit-scrollbar-track,
+.overflow-x-auto::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.overflow-y-auto::-webkit-scrollbar-thumb {
-  background-color: var(--color-border);
-  border-radius: 2px;
+.overflow-y-auto::-webkit-scrollbar-thumb,
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background-color: #CBD5E1;
+  border-radius: 3px;
 }
 
-.overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background-color: var(--color-muted-foreground);
+.overflow-y-auto::-webkit-scrollbar-thumb:hover,
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background-color: #94A3B8;
+}
+
+/* ──── Chart Colors (CSS Custom Properties for JS access) ──── */
+
+:root {
+  /* Categorical: Age groups (blue gradient) */
+  --chart-age-1: #93C5FD;
+  --chart-age-2: #60A5FA;
+  --chart-age-3: #3B82F6;
+  --chart-age-4: #2563EB;
+  --chart-age-5: #1D4ED8;
+
+  /* Categorical: Gender */
+  --chart-male: #3B82F6;
+  --chart-female: #EC4899;
+
+  /* Categorical: HbA1c status */
+  --chart-normal: #10B981;
+  --chart-prediabetic: #F59E0B;
+  --chart-diabetic: #EF4444;
+
+  /* Categorical: Sites */
+  --chart-site-1: #3674F6;
+  --chart-site-2: #03B6D9;
+  --chart-site-3: #8B5CF6;
+  --chart-site-4: #F97316;
+  --chart-site-5: #059669;
+  --chart-site-6: #EC4899;
+
+  /* Sequential: Blue scale */
+  --chart-seq-1: #DBEAFE;
+  --chart-seq-2: #93C5FD;
+  --chart-seq-3: #3B82F6;
+  --chart-seq-4: #1D4ED8;
+  --chart-seq-5: #1E3A8A;
+
+  /* Diverging: Blue-White-Red */
+  --chart-div-low: #2563EB;
+  --chart-div-mid: #FFFFFF;
+  --chart-div-high: #DC2626;
+
+  /* Sample types */
+  --chart-blood: #DC2626;
+  --chart-plasma: #F59E0B;
+  --chart-serum: #8B5CF6;
+  --chart-urine: #06B6D4;
+  --chart-pbmc: #10B981;
+  --chart-dna: #3B82F6;
+  --chart-hair: #78716C;
+  --chart-cheek: #EC4899;
+}
+
+/* ──── Leaflet Map Overrides ──── */
+
+.leaflet-container {
+  border-radius: var(--radius-lg);
+  font-family: var(--font-sans);
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* ──── Recharts Overrides ──── */
+
+.recharts-cartesian-axis-tick-value {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  fill: #64748B;
+}
+
+.recharts-legend-item-text {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: #475569 !important;
+}
+
+/* ──── Plotly Overrides ──── */
+
+.js-plotly-plot .plotly .modebar {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.js-plotly-plot:hover .plotly .modebar {
+  opacity: 1;
+}
+
+/* ──── Responsive Helpers ──── */
+
+@media (max-width: 768px) {
+  .hide-on-mobile {
+    display: none !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .show-on-mobile-only {
+    display: none !important;
+  }
 }

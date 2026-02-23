@@ -89,11 +89,76 @@ class DashboardService:
             for r in rate_rows
         ]
 
+        # Demographics: by age group
+        by_age_q = (
+            select(
+                Participant.age_group,
+                func.count(Participant.id).label("count"),
+            )
+            .where(Participant.is_deleted == False)  # noqa: E712
+            .group_by(Participant.age_group)
+            .order_by(Participant.age_group.asc())
+        )
+        by_age_rows = (await self.db.execute(by_age_q)).all()
+        by_age_group = [
+            {"age_group": str(r[0].value if hasattr(r[0], 'value') else r[0]), "count": r[1]}
+            for r in by_age_rows
+        ]
+
+        # Demographics: by sex
+        by_sex_q = (
+            select(
+                Participant.sex,
+                func.count(Participant.id).label("count"),
+            )
+            .where(Participant.is_deleted == False)  # noqa: E712
+            .group_by(Participant.sex)
+        )
+        by_sex_rows = (await self.db.execute(by_sex_q)).all()
+        by_sex = [
+            {"sex": str(r[0].value if hasattr(r[0], 'value') else r[0]), "count": r[1]}
+            for r in by_sex_rows
+        ]
+
+        # Demographics: by age group × sex cross-tab
+        by_age_sex_q = (
+            select(
+                Participant.age_group,
+                Participant.sex,
+                func.count(Participant.id).label("count"),
+            )
+            .where(Participant.is_deleted == False)  # noqa: E712
+            .group_by(Participant.age_group, Participant.sex)
+            .order_by(Participant.age_group.asc(), Participant.sex.asc())
+        )
+        by_age_sex_rows = (await self.db.execute(by_age_sex_q)).all()
+        by_age_sex = [
+            {
+                "age_group": str(r[0].value if hasattr(r[0], 'value') else r[0]),
+                "sex": str(r[1].value if hasattr(r[1], 'value') else r[1]),
+                "count": r[2],
+            }
+            for r in by_age_sex_rows
+        ]
+
+        # Recent 30 days count
+        recent_30d_q = select(func.count()).where(
+            Participant.is_deleted == False,  # noqa: E712
+            Participant.enrollment_date >= thirty_days_ago,
+        )
+        recent_30d = (await self.db.execute(recent_30d_q)).scalar_one()
+
         return {
             "total_participants": total,
             "by_site": by_site,
             "by_wave": by_wave,
             "enrollment_rate_30d": enrollment_rate,
+            "recent_30d": recent_30d,
+            "demographics": {
+                "by_age_group": by_age_group,
+                "by_sex": by_sex,
+                "by_age_sex": by_age_sex,
+            },
         }
 
     # ── Sample Inventory ──────────────────────────────────────────────

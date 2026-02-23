@@ -7,11 +7,19 @@ import api from '@/lib/api'
 
 // --- Types ---
 
+export interface DemographicStats {
+  by_age_group: Array<{ age_group: string; count: number }>
+  by_sex: Array<{ sex: string; count: number }>
+  by_age_sex: Array<{ age_group: string; sex: string; count: number }>
+}
+
 export interface EnrollmentStats {
-  total: number
-  by_site: Array<{ site_id: string; site_name: string; count: number }>
+  total_participants: number
+  by_site: Array<{ site_name: string; site_code: string; count: number }>
   by_wave: Array<{ wave: number; count: number }>
-  enrollment_over_time: Array<{ date: string; count: number; cumulative: number }>
+  enrollment_rate_30d: Array<{ date: string; count: number }>
+  recent_30d: number
+  demographics?: DemographicStats
 }
 
 export interface InventoryStats {
