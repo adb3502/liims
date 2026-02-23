@@ -60,6 +60,51 @@ UPLOAD_DIR = os.path.join(tempfile.gettempdir(), "liims_imports")
 _AGE_GROUP_MAP = {1: AgeGroup.AGE_18_29, 2: AgeGroup.AGE_30_44, 3: AgeGroup.AGE_45_59, 4: AgeGroup.AGE_60_74, 5: AgeGroup.AGE_75_PLUS}
 _SEX_MAP = {"A": Sex.MALE, "B": Sex.FEMALE}
 
+# Site assignment by participant number range
+# Key: (min, max) inclusive → site code
+_SITE_RANGES = [
+    (1, 100, "RMH"),       # M.S. Ramaiah Memorial Hospital
+    (101, 200, "SSSSMH"),  # Sri Sathya Sai Sarla Memorial Hospital
+    (201, 400, "BBH"),     # Bangalore Baptist Hospital
+    (401, 500, "CHAF"),    # Command Hospital Air Force
+]
+
+# Fields to strip from stored submission data (PII/sensitive)
+_SENSITIVE_FIELDS = {
+    ("participant_identifier", "name"),
+    ("continue_section", "phone"),
+}
+
+
+def _get_site_code_for_number(participant_number: int) -> str | None:
+    """Return site code based on participant number range."""
+    for low, high, code in _SITE_RANGES:
+        if low <= participant_number <= high:
+            return code
+    return None
+
+
+def _strip_sensitive_fields(submission: dict) -> dict:
+    """Remove PII fields from submission data before storage."""
+    import copy
+    cleaned = copy.deepcopy(submission)
+    for path in _SENSITIVE_FIELDS:
+        d = cleaned
+        for key in path[:-1]:
+            d = d.get(key, {})
+            if not isinstance(d, dict):
+                break
+        else:
+            d.pop(path[-1], None)
+    # Also strip from the all_data summary section
+    all_data = cleaned.get("continue_section", {}).get("all_data", {})
+    if isinstance(all_data, dict):
+        all_data.pop("calc_name", None)
+        all_data.pop("calc_phone", None)
+        all_data.pop("display_name", None)
+        all_data.pop("display_phone", None)
+    return cleaned
+
 
 def _parse_participant_from_odk(submission: dict) -> dict | None:
     """Extract participant metadata from an ODK submission.
@@ -364,16 +409,12 @@ class OdkService:
             submissions = await client.get_all_submissions(project_id, odk_form_id)
             log.submissions_found = len(submissions)
 
-            # Get default collection site (first active site)
-            site_result = await self.db.execute(
-                select(CollectionSite)
-                .where(CollectionSite.is_active == True)  # noqa: E712
-                .limit(1)
-            )
-            default_site = site_result.scalar_one_or_none()
-            if not default_site:
+            # Load all collection sites keyed by code for range-based assignment
+            site_result = await self.db.execute(select(CollectionSite))
+            all_sites = {s.code: s for s in site_result.scalars().all()}
+            if not all_sites:
                 log.status = OdkSyncStatus.FAILED
-                log.error_message = "No active collection site found"
+                log.error_message = "No collection sites found"
                 log.sync_completed_at = datetime.now(timezone.utc)
                 return log
 
@@ -404,9 +445,27 @@ class OdkService:
                             odk_instance_id=instance_id,
                             odk_form_id=odk_form_id,
                             odk_form_version=submission.get("__system", {}).get("formVersion"),
-                            submission_data=submission,
+                            submission_data=cleaned_submission,
                             processing_status=OdkProcessingStatus.FAILED,
                             error_message="Could not parse participant code",
+                        ))
+                        failed += 1
+                        continue
+
+                    # Resolve collection site from participant number
+                    site_code = _get_site_code_for_number(p_data["participant_number"])
+                    site = all_sites.get(site_code) if site_code else None
+                    if site is None:
+                        cleaned_submission = _strip_sensitive_fields(submission)
+                        self.db.add(OdkSubmission(
+                            id=uuid.uuid4(),
+                            odk_instance_id=instance_id,
+                            odk_form_id=odk_form_id,
+                            odk_form_version=submission.get("__system", {}).get("formVersion"),
+                            participant_code_raw=p_data["participant_code"],
+                            submission_data=cleaned_submission,
+                            processing_status=OdkProcessingStatus.FAILED,
+                            error_message=f"Participant number {p_data['participant_number']} does not match any site range",
                         ))
                         failed += 1
                         continue
@@ -420,6 +479,8 @@ class OdkService:
                     participant = existing.scalar_one_or_none()
 
                     clinical = _extract_clinical_data(submission)
+                    # Strip PII before storing raw submission
+                    cleaned_submission = _strip_sensitive_fields(submission)
 
                     if participant is None:
                         # Create new participant
@@ -431,7 +492,7 @@ class OdkService:
                             age_group=p_data["age_group"],
                             sex=p_data["sex"],
                             date_of_birth=p_data.get("date_of_birth"),
-                            collection_site_id=default_site.id,
+                            collection_site_id=site.id,
                             enrollment_date=datetime.now(timezone.utc),
                             enrollment_source=EnrollmentSource.ODK,
                             odk_submission_id=instance_id,
@@ -442,11 +503,12 @@ class OdkService:
                         self.db.add(participant)
                         await self.db.flush()
                     else:
-                        # Update existing participant's clinical data
+                        # Update existing participant's clinical data and site
                         participant.clinical_data = clinical
                         participant.odk_submission_id = instance_id
+                        participant.collection_site_id = site.id
 
-                    # Store submission record
+                    # Store submission record (PII stripped)
                     self.db.add(OdkSubmission(
                         id=uuid.uuid4(),
                         odk_instance_id=instance_id,
@@ -454,7 +516,7 @@ class OdkService:
                         odk_form_version=submission.get("__system", {}).get("formVersion"),
                         participant_id=participant.id,
                         participant_code_raw=p_data["participant_code"],
-                        submission_data=submission,
+                        submission_data=cleaned_submission,
                         processed_at=datetime.now(timezone.utc),
                         processing_status=OdkProcessingStatus.PROCESSED,
                     ))
