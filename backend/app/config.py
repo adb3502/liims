@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     ODK_CENTRAL_URL: str = ""
     ODK_CENTRAL_EMAIL: str = ""
     ODK_CENTRAL_PASSWORD: str = ""
+    ODK_PROJECT_ID: int = 1
+    ODK_FORM_ID: str = "participant_id"
     ODK_SYNC_INTERVAL_MINUTES: int = 60
 
     # Email / SMTP

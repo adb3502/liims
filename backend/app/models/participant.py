@@ -14,7 +14,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -64,6 +64,7 @@ class Participant(BaseModel):
         default=EnrollmentSource.ODK,
     )
     odk_submission_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    clinical_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     wave: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
     completion_pct: Mapped[Decimal] = mapped_column(
         Numeric(5, 2), default=0, server_default="0", nullable=False

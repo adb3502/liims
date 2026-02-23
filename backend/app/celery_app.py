@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 
 from app.config import settings
 
@@ -19,9 +20,9 @@ celery.conf.update(
             "task": "app.tasks.dashboard.refresh_dashboard_cache",
             "schedule": settings.DASHBOARD_REFRESH_INTERVAL_MINUTES * 60,
         },
-        "odk-sync": {
+        "odk-sync-weekly": {
             "task": "app.tasks.odk.sync_odk_submissions",
-            "schedule": settings.ODK_SYNC_INTERVAL_MINUTES * 60,
+            "schedule": crontab(hour=6, minute=0, day_of_week=1),  # Monday 6:00 AM IST
         },
         "scan-watch-directories": {
             "task": "app.tasks.files.scan_watch_directories",

@@ -13,10 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.enums import (
+    AgeGroup,
     AuditAction,
+    EnrollmentSource,
     MatchStatus,
+    OdkProcessingStatus,
     OdkSyncStatus,
     PartnerName,
+    Sex,
     StoolKitStatus,
 )
 from app.models.partner import (
@@ -29,7 +33,7 @@ from app.models.partner import (
     StoolKit,
     TestNameAlias,
 )
-from app.models.participant import Participant
+from app.models.participant import CollectionSite, Participant
 from app.models.user import AuditLog
 from app.schemas.partner import (
     CanonicalTestCreate,
@@ -47,6 +51,199 @@ from app.schemas.partner import (
 logger = logging.getLogger(__name__)
 
 UPLOAD_DIR = os.path.join(tempfile.gettempdir(), "liims_imports")
+
+
+# ---------------------------------------------------------------------------
+# ODK Submission Parsing Helpers
+# ---------------------------------------------------------------------------
+
+_AGE_GROUP_MAP = {1: AgeGroup.AGE_18_29, 2: AgeGroup.AGE_30_44, 3: AgeGroup.AGE_45_59, 4: AgeGroup.AGE_60_74, 5: AgeGroup.AGE_75_PLUS}
+_SEX_MAP = {"A": Sex.MALE, "B": Sex.FEMALE}
+
+
+def _parse_participant_from_odk(submission: dict) -> dict | None:
+    """Extract participant metadata from an ODK submission.
+
+    Returns dict with participant_code, group_code, participant_number,
+    age_group, sex, date_of_birth or None if unparseable.
+    """
+    import re
+
+    pid_section = submission.get("participant_identifier", {})
+    code = pid_section.get("participant_id", "")
+    if not code:
+        return None
+
+    # Code format: {digit}{A|B}-{number} e.g. "5B-213"
+    m = re.match(r"^(\d)([AB])-(\d+)$", code)
+    if not m:
+        return None
+
+    age_digit = int(m.group(1))
+    sex_letter = m.group(2)
+    number = int(m.group(3))
+
+    age_group = _AGE_GROUP_MAP.get(age_digit)
+    sex = _SEX_MAP.get(sex_letter)
+    if age_group is None or sex is None:
+        return None
+
+    # Extract DOB from continue_section
+    cont = submission.get("continue_section", {})
+    dob = None
+    dob_str = cont.get("dob")
+    if dob_str:
+        try:
+            from datetime import date as _date
+            dob = _date.fromisoformat(dob_str)
+        except (ValueError, TypeError):
+            pass
+
+    return {
+        "participant_code": code,
+        "group_code": f"{age_digit}{sex_letter}",
+        "participant_number": number,
+        "age_group": age_group,
+        "sex": sex,
+        "date_of_birth": dob,
+    }
+
+
+def _safe_get(d: dict, *keys, default=None):
+    """Safely navigate nested dict keys."""
+    for k in keys:
+        if not isinstance(d, dict):
+            return default
+        d = d.get(k, default)
+    return d
+
+
+def _extract_clinical_data(submission: dict) -> dict:
+    """Extract structured clinical summary from ODK submission."""
+    cont = submission.get("continue_section", {})
+    clin = cont.get("clinical_examination_data", {})
+    comorbid = cont.get("comorbid_illness", {})
+    family = cont.get("family_history", {})
+    addiction = cont.get("addiction_habitual_data", {})
+    lifestyle = cont.get("lifestyle_wellness_data", {})
+    qol = cont.get("quality_of_life_assessment", {})
+
+    vitals = clin.get("vital_signs", {})
+    anthro = clin.get("anthropometry", {})
+    head_to_toe = clin.get("head_to_toe", {})
+    systemic = clin.get("systemic", {})
+
+    dass = lifestyle.get("dass21_group", {})
+    psqi = lifestyle.get("psqi_group", {})
+    mmse = qol.get("mmse", {})
+    frailty = qol.get("frailty_group", {})
+    who = qol.get("who_group", {})
+
+    return {
+        "demographics": {
+            "age": cont.get("age"),
+            "gender": cont.get("gender"),
+            "dob": cont.get("dob"),
+            "language": cont.get("language"),
+            "pin_code": cont.get("current_pin"),
+            "residential_area": cont.get("residential_area"),
+            "living_arrangement": cont.get("living_arrangement"),
+            "marital_status": cont.get("marital_status"),
+            "religion": cont.get("religion"),
+            "education": cont.get("education"),
+            "occupation": cont.get("occupation"),
+            "monthly_income": cont.get("monthly_income"),
+            "socioeconomic_status": cont.get("socioeconomic_status"),
+            "no_of_family_members": cont.get("no_of_family_members"),
+        },
+        "vitals": {
+            "pulse_rate": vitals.get("pulse_rate"),
+            "bp_sbp": vitals.get("bp_sbp"),
+            "bp_dbp": vitals.get("bp_dbp"),
+            "resp_rate": vitals.get("resp_rate"),
+            "spo2": vitals.get("spo2"),
+            "temperature": vitals.get("temperature"),
+        },
+        "anthropometry": {
+            "height_cm": anthro.get("height_cm"),
+            "weight_kg": anthro.get("weight_kg"),
+            "bmi": anthro.get("bmi"),
+        },
+        "head_to_toe": head_to_toe,
+        "systemic": {
+            "cvs": systemic.get("cvs"),
+            "rs": systemic.get("rs"),
+            "per_abdomen": systemic.get("pa"),
+            "msk_exam": systemic.get("msk_exam"),
+            "handgrip_strength": systemic.get("handgrip_strength"),
+            "age_reader_test": systemic.get("age_reader_test"),
+        },
+        "comorbidities": {
+            "dm": comorbid.get("dm_history") == "yes",
+            "dm_type": comorbid.get("dm_type"),
+            "dm_duration": comorbid.get("dm_duration"),
+            "htn": comorbid.get("htn_history") == "yes",
+            "htn_duration": comorbid.get("htn_duration"),
+            "bronchial_asthma": comorbid.get("ba_history") == "yes",
+            "ihd": comorbid.get("ihd_history") == "yes",
+            "hypothyroid": comorbid.get("hypo_history") == "yes",
+            "epilepsy": comorbid.get("epilepsy_history") == "yes",
+            "psychiatric": comorbid.get("psych_history") == "yes",
+            "covid_history": comorbid.get("covid_history") == "yes",
+            "covid_vaccinated": comorbid.get("covid_vaccinated") == "yes",
+            "covid_doses": comorbid.get("covid_doses"),
+            "other": comorbid.get("other_comorbids"),
+        },
+        "family_history": {
+            "dm": family.get("fh_dm") == "yes",
+            "ihd": family.get("fh_ihd") == "yes",
+            "cancer": family.get("fh_cancer") == "yes",
+            "neurodegenerative": family.get("fh_nd") == "yes",
+        },
+        "addiction": {
+            "smoking_status": addiction.get("smoking_status"),
+            "smokeless_status": addiction.get("smokeless_status"),
+            "alcohol_status": addiction.get("alcohol_status"),
+            "passive_smoke": addiction.get("passive_smoke"),
+        },
+        "lifestyle": {
+            "dietary_pattern": lifestyle.get("dietary_pattern"),
+            "bowel_frequency": lifestyle.get("bowel_frequency"),
+            "water_per_day": lifestyle.get("water_per_day"),
+            "probiotics_use": lifestyle.get("probiotics_use"),
+            "supplement_use": lifestyle.get("supplement_use"),
+            "exercise": lifestyle.get("exercise_group"),
+        },
+        "scores": {
+            "dass_depression": _try_int(dass.get("score_depression")),
+            "dass_anxiety": _try_int(dass.get("score_anxiety")),
+            "dass_stress": _try_int(dass.get("score_stress")),
+            "dass_total": _try_int(dass.get("dass_total_score")),
+            "depression_level": dass.get("depression_level"),
+            "anxiety_level": dass.get("anxiety_level"),
+            "stress_level": dass.get("stress_level"),
+            "mmse_total": _try_int(mmse.get("total_score")),
+            "frail_score": _try_int(frailty.get("frail_score")),
+            "frail_category": frailty.get("frail_category"),
+            "sleep_hours": psqi.get("sleep_hours"),
+            "sleep_latency": psqi.get("sleep_latency"),
+        },
+        "who_qol": who,
+        "female_specific": {
+            "menopausal_status": cont.get("menopausal_status"),
+            "lmp": cont.get("lmp"),
+            "pcos_history": cont.get("pcos_history"),
+        } if cont.get("gender") == "female" else None,
+    }
+
+
+def _try_int(val) -> int | None:
+    if val is None:
+        return None
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -127,17 +324,20 @@ class OdkService:
     async def trigger_sync(
         self, form_id: str | None, triggered_by: uuid.UUID
     ) -> OdkSyncLog:
-        """Trigger an ODK sync.
+        """Pull submissions from ODK Central and create/update participants.
 
-        TODO: Integrate with real ODK Central API. Currently creates a
-        completed log entry as a placeholder for the sync workflow.
+        Connects to ODK Central OData API, fetches all submissions,
+        skips duplicates (by odk_instance_id), and creates Participant
+        records with clinical data extracted from the submission.
         """
+        from app.config import settings
+        from app.services.odk_client import OdkCentralClient
+
         now = datetime.now(timezone.utc)
         log = OdkSyncLog(
             id=uuid.uuid4(),
             sync_started_at=now,
-            sync_completed_at=now,
-            status=OdkSyncStatus.COMPLETED,
+            status=OdkSyncStatus.RUNNING,
             submissions_found=0,
             submissions_processed=0,
             submissions_failed=0,
@@ -146,13 +346,148 @@ class OdkService:
         self.db.add(log)
         await self.db.flush()
 
+        if not settings.ODK_CENTRAL_URL:
+            log.status = OdkSyncStatus.FAILED
+            log.error_message = "ODK_CENTRAL_URL not configured"
+            log.sync_completed_at = datetime.now(timezone.utc)
+            return log
+
+        try:
+            client = OdkCentralClient(
+                base_url=settings.ODK_CENTRAL_URL,
+                email=settings.ODK_CENTRAL_EMAIL,
+                password=settings.ODK_CENTRAL_PASSWORD,
+            )
+            project_id = settings.ODK_PROJECT_ID
+            odk_form_id = form_id or settings.ODK_FORM_ID
+
+            submissions = await client.get_all_submissions(project_id, odk_form_id)
+            log.submissions_found = len(submissions)
+
+            # Get default collection site (first active site)
+            site_result = await self.db.execute(
+                select(CollectionSite)
+                .where(CollectionSite.is_active == True)  # noqa: E712
+                .limit(1)
+            )
+            default_site = site_result.scalar_one_or_none()
+            if not default_site:
+                log.status = OdkSyncStatus.FAILED
+                log.error_message = "No active collection site found"
+                log.sync_completed_at = datetime.now(timezone.utc)
+                return log
+
+            processed = 0
+            failed = 0
+
+            for submission in submissions:
+                try:
+                    instance_id = submission.get("__id", "")
+                    if not instance_id:
+                        failed += 1
+                        continue
+
+                    # Check for duplicate
+                    dup = await self.db.execute(
+                        select(OdkSubmission.id).where(
+                            OdkSubmission.odk_instance_id == instance_id
+                        )
+                    )
+                    if dup.scalar_one_or_none() is not None:
+                        continue  # Already imported, skip silently
+
+                    # Parse participant data
+                    p_data = _parse_participant_from_odk(submission)
+                    if not p_data:
+                        self.db.add(OdkSubmission(
+                            id=uuid.uuid4(),
+                            odk_instance_id=instance_id,
+                            odk_form_id=odk_form_id,
+                            odk_form_version=submission.get("__system", {}).get("formVersion"),
+                            submission_data=submission,
+                            processing_status=OdkProcessingStatus.FAILED,
+                            error_message="Could not parse participant code",
+                        ))
+                        failed += 1
+                        continue
+
+                    # Check if participant already exists
+                    existing = await self.db.execute(
+                        select(Participant).where(
+                            Participant.participant_code == p_data["participant_code"]
+                        )
+                    )
+                    participant = existing.scalar_one_or_none()
+
+                    clinical = _extract_clinical_data(submission)
+
+                    if participant is None:
+                        # Create new participant
+                        participant = Participant(
+                            id=uuid.uuid4(),
+                            participant_code=p_data["participant_code"],
+                            group_code=p_data["group_code"],
+                            participant_number=p_data["participant_number"],
+                            age_group=p_data["age_group"],
+                            sex=p_data["sex"],
+                            date_of_birth=p_data.get("date_of_birth"),
+                            collection_site_id=default_site.id,
+                            enrollment_date=datetime.now(timezone.utc),
+                            enrollment_source=EnrollmentSource.ODK,
+                            odk_submission_id=instance_id,
+                            clinical_data=clinical,
+                            wave=1,
+                            created_by=triggered_by,
+                        )
+                        self.db.add(participant)
+                        await self.db.flush()
+                    else:
+                        # Update existing participant's clinical data
+                        participant.clinical_data = clinical
+                        participant.odk_submission_id = instance_id
+
+                    # Store submission record
+                    self.db.add(OdkSubmission(
+                        id=uuid.uuid4(),
+                        odk_instance_id=instance_id,
+                        odk_form_id=odk_form_id,
+                        odk_form_version=submission.get("__system", {}).get("formVersion"),
+                        participant_id=participant.id,
+                        participant_code_raw=p_data["participant_code"],
+                        submission_data=submission,
+                        processed_at=datetime.now(timezone.utc),
+                        processing_status=OdkProcessingStatus.PROCESSED,
+                    ))
+                    processed += 1
+
+                except Exception as e:
+                    logger.error("Failed to process submission %s: %s", instance_id, e)
+                    failed += 1
+
+            log.submissions_processed = processed
+            log.submissions_failed = failed
+            log.status = OdkSyncStatus.COMPLETED
+            log.sync_completed_at = datetime.now(timezone.utc)
+
+        except Exception as e:
+            logger.exception("ODK sync failed: %s", e)
+            log.status = OdkSyncStatus.FAILED
+            log.error_message = str(e)[:500]
+            log.sync_completed_at = datetime.now(timezone.utc)
+
         self.db.add(AuditLog(
             id=uuid.uuid4(),
             user_id=triggered_by,
             action=AuditAction.CREATE,
             entity_type="odk_sync_log",
             entity_id=log.id,
-            new_values={"form_id": form_id or "all", "status": log.status.value},
+            new_values={
+                "form_id": form_id or "all",
+                "status": log.status.value,
+                "found": log.submissions_found,
+                "processed": log.submissions_processed,
+                "failed": log.submissions_failed,
+            },
         ))
         return log
 
