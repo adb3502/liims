@@ -28,6 +28,6 @@ class SingleGroupLabelRequest(BaseModel):
     )
     group: str = Field(
         ...,
-        pattern=r"^(cryovial|epigenetics|samples|edta|sst_fl_blood)$",
-        description="Label group: cryovial, epigenetics, samples, edta, or sst_fl_blood",
+        pattern=r"^(cryovial|epigenetics|samples|edta|sst_fl_blood|urine)$",
+        description="Label group: cryovial, epigenetics, samples, edta, sst_fl_blood, or urine",
     )

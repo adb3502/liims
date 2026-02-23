@@ -52,6 +52,7 @@ const navigation: NavItem[] = [
       { label: 'All Samples', path: '/samples' },
       { label: 'Register', path: '/samples/register' },
       { label: 'Processing', path: '/samples/processing' },
+      { label: 'Labels', path: '/samples/labels' },
     ],
   },
   {

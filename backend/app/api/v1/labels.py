@@ -27,10 +27,11 @@ async def generate_labels_zip(
     body: LabelGenerateRequest,
     current_user: Annotated[User, Depends(require_role(*LABEL_ROLES))],
 ):
-    """Generate all 5 label documents as a ZIP file for A4 printing.
+    """Generate all 6 label documents as a ZIP file for A4 printing.
 
     Returns a ZIP containing:
     - labels_cryovial.docx (P1-P5, 5 per row)
+    - labels_urine.docx (U1, 5 per row)
     - labels_epigenetics.docx (E1-E4, 4 per row)
     - labels_samples.docx (CS1, R1, H1, +H2 for B-participants)
     - labels_edta.docx (EDTA1-EDTA4)

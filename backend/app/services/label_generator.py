@@ -31,6 +31,7 @@ LABEL_GROUPS = {
     "samples": ["CS1", "R1", "H1", ""],  # blank slot becomes H2 for B-participants
     "edta": ["EDTA1", "EDTA2", "EDTA3", "EDTA4"],
     "sst_fl_blood": ["SST1", "SST2", "Fl1", "B1"],
+    "urine": ["U1"],
 }
 
 # Cryovial layout: 5 labels per row with row gutters
@@ -285,6 +286,10 @@ def generate_label_zip(
         cryo_buf = _build_docx(collections["cryovial"], CRYO_CONFIG)
         zf.writestr(f"labels_cryovial{suffix}.docx", cryo_buf.read())
 
+        # Urine labels (5 per row, same cryo layout)
+        urine_buf = _build_docx(collections["urine"], CRYO_CONFIG)
+        zf.writestr(f"labels_urine{suffix}.docx", urine_buf.read())
+
         # Normal labels (4 per row each)
         for group_name in ["epigenetics", "samples", "edta", "sst_fl_blood"]:
             buf = _build_docx(collections[group_name], NORMAL_CONFIG)
@@ -313,5 +318,5 @@ def generate_single_label_doc(
 
     codes = sorted(participant_codes)
     collections = _create_label_collections(codes)
-    config = CRYO_CONFIG if group == "cryovial" else NORMAL_CONFIG
+    config = CRYO_CONFIG if group in ("cryovial", "urine") else NORMAL_CONFIG
     return _build_docx(collections[group], config)

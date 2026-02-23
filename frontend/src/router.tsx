@@ -49,6 +49,7 @@ import { ProfilePage } from '@/features/profile/ProfilePage'
 import { PageSpinner } from '@/components/ui/spinner'
 import { SampleProcessingPage } from '@/features/samples/SampleProcessingPage'
 import { SampleQueuePage } from '@/features/instruments/SampleQueuePage'
+import { LabelGeneratorPage } from '@/features/samples/LabelGeneratorPage'
 import { SitesDashboardPage } from '@/features/reports/SitesDashboardPage'
 import type { UserRole } from '@/types'
 
@@ -159,6 +160,7 @@ export const routes: RouteObject[] = [
             ),
           },
           { path: 'processing', element: <SampleProcessingPage /> },
+          { path: 'labels', element: <LabelGeneratorPage /> },
           { path: ':id', element: <SampleDetailPage /> },
         ],
       },
