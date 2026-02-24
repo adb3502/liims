@@ -90,6 +90,15 @@ const COLOR_BY_OPTIONS = [
 ] as const
 type ColorBy = 'age_group' | 'sex' | 'site' | 'hba1c_status'
 
+const COLOR_PALETTES = {
+  default: { label: 'Default (BHARAT)', colors: ['#3674F6', '#03B6D9', '#8B5CF6', '#F97316', '#059669', '#EC4899', '#6366F1', '#14B8A6'] },
+  viridis: { label: 'Viridis', colors: ['#440154', '#482878', '#3E4A89', '#31688E', '#26828E', '#1F9E89', '#35B779', '#6DCD59', '#B4DE2C', '#FDE725'] },
+  plasma: { label: 'Plasma', colors: ['#0D0887', '#4B03A1', '#7D03A8', '#A82296', '#CC4778', '#E56B5D', '#F89441', '#FDC328', '#F0F921'] },
+  pastel: { label: 'Pastel', colors: ['#8DD3C7', '#FFFFB3', '#BEBADA', '#FB8072', '#80B1D3', '#FDB462', '#B3DE69', '#FCCDE5'] },
+  colorblind: { label: 'Colorblind Safe', colors: ['#E69F00', '#56B4E9', '#009E73', '#F0E442', '#0072B2', '#D55E00', '#CC79A7', '#999999'] },
+} as const
+type PaletteName = keyof typeof COLOR_PALETTES
+
 const METHODS = [
   { value: 'spearman', label: 'Spearman' },
   { value: 'pearson', label: 'Pearson' },
@@ -277,12 +286,15 @@ function getGroupLabel(groupBy: GroupBy, groupKey: string): string {
   return groupKey
 }
 
-function getColorByColor(colorBy: ColorBy, groupBy: GroupBy, groupKey: string, index: number): string {
-  // When colorBy matches groupBy, derive color from the group key
+function getColorByColor(colorBy: ColorBy, groupBy: GroupBy, groupKey: string, index: number, paletteName: PaletteName = 'default'): string {
+  // Non-default palette: use palette colors by index
+  if (paletteName !== 'default') {
+    const pal = COLOR_PALETTES[paletteName].colors
+    return pal[index % pal.length]
+  }
+  // Default: use semantic colors for known groupings
   if (colorBy === groupBy) return getGroupColor(groupBy, groupKey, index)
-  // HbA1c status coloring: backend pending, fall back to index-based
   if (colorBy === 'hba1c_status') return SITE_COLORS[index % SITE_COLORS.length]
-  // Cross-dimension coloring: use index-based as fallback
   return SITE_COLORS[index % SITE_COLORS.length]
 }
 
@@ -297,6 +309,7 @@ function DistributionTab({
   const [chartType, setChartType] = useState<ChartType>('box')
   const [groupBy, setGroupBy] = useState<GroupBy>('age_group')
   const [colorBy, setColorBy] = useState<ColorBy>('age_group')
+  const [palette, setPalette] = useState<PaletteName>('default')
   const [showPoints, setShowPoints] = useState(false)
 
   // Keep colorBy in sync with groupBy default when groupBy changes
@@ -326,13 +339,14 @@ function DistributionTab({
 
     if (chartType === 'box') {
       return data.groups.map((g, i) => {
-        const color = getColorByColor(colorBy, groupBy, g.group, i)
+        const color = getColorByColor(colorBy, groupBy, g.group, i, palette)
         return {
           type: 'box' as const,
           name: getGroupLabel(groupBy, g.group),
           y: g.values ?? [],
-          boxpoints: 'outliers' as const,
-          jitter: 0.3,
+          boxpoints: showPoints ? ('all' as const) : ('outliers' as const),
+          jitter: 0.4,
+          pointpos: 0,
           marker: { color },
           line: { color },
           fillcolor: `${color}33`,
@@ -348,7 +362,7 @@ function DistributionTab({
 
     if (chartType === 'violin') {
       return data.groups.map((g, i) => {
-        const color = getColorByColor(colorBy, groupBy, g.group, i)
+        const color = getColorByColor(colorBy, groupBy, g.group, i, palette)
         return {
           type: 'violin' as const,
           name: getGroupLabel(groupBy, g.group),
@@ -376,19 +390,19 @@ function DistributionTab({
       marker: { color: colors[i] },
       hovertemplate: `<b>${getGroupLabel(groupBy, g.group)}</b><br>Count: %{y}<extra></extra>`,
     }))
-  }, [data, chartType, groupBy, colorBy, showPoints])
+  }, [data, chartType, groupBy, colorBy, palette, showPoints])
 
   // N annotations for box/violin — shown below each trace
   const annotations = useMemo(() => {
     if (!data || chartType === 'histogram') return []
     return data.groups.map((g, i) => ({
       x: i,
-      y: -0.08,
+      y: -0.15,
       xref: 'x' as const,
       yref: 'paper' as const,
       text: `n=${g.n.toLocaleString()}`,
       showarrow: false,
-      font: { size: 9, color: '#94A3B8' },
+      font: { size: 10, color: '#64748B', family: '"Red Hat Display", sans-serif' },
       xanchor: 'center' as const,
     }))
   }, [data, chartType])
@@ -483,6 +497,30 @@ function DistributionTab({
         </select>
       </div>
 
+      {/* Palette selector */}
+      <div className="flex items-center gap-2">
+        <label className="text-xs text-gray-500 flex-shrink-0" htmlFor="palette-select">
+          Palette:
+        </label>
+        <select
+          id="palette-select"
+          value={palette}
+          onChange={(e) => setPalette(e.target.value as PaletteName)}
+          className="rounded-lg border border-gray-200 bg-white py-1 pl-2 pr-7 text-xs text-gray-700 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
+          aria-label="Color palette"
+        >
+          {(Object.keys(COLOR_PALETTES) as PaletteName[]).map((key) => (
+            <option key={key} value={key}>{COLOR_PALETTES[key].label}</option>
+          ))}
+        </select>
+        {/* Palette preview dots */}
+        <div className="flex gap-0.5">
+          {COLOR_PALETTES[palette].colors.slice(0, 6).map((c, i) => (
+            <span key={i} className="h-3 w-3 rounded-full" style={{ backgroundColor: c }} />
+          ))}
+        </div>
+      </div>
+
       {/* Show Points toggle — only for box and violin */}
       {(chartType === 'box' || chartType === 'violin') && (
         <label className="inline-flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
@@ -527,8 +565,8 @@ function DistributionTab({
                 ? { text: selectedMeta?.unit ?? '', font: { size: 11 } }
                 : { text: 'Count', font: { size: 11 } },
             },
-            legend: { orientation: 'h' as const, y: -0.2, x: 0.5, xanchor: 'center' as const },
-            margin: { l: 60, r: 20, t: 20, b: 90 },
+            legend: { orientation: 'h' as const, y: -0.3, x: 0.5, xanchor: 'center' as const, font: { size: 11 } },
+            margin: { l: 60, r: 20, t: 20, b: 120 },
             annotations,
           }}
           config={{ displayModeBar: false, responsive: true }}
