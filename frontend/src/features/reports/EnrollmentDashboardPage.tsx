@@ -67,23 +67,7 @@ const AGE_BINS_STUDY = [
   { label: '75+',   min: 75, max: Infinity },
 ]
 
-// Fine-grained age bins for continuous distribution
-const AGE_BINS_CONTINUOUS = [
-  { label: '18-24', min: 18, max: 25 },
-  { label: '25-29', min: 25, max: 30 },
-  { label: '30-34', min: 30, max: 35 },
-  { label: '35-39', min: 35, max: 40 },
-  { label: '40-44', min: 40, max: 45 },
-  { label: '45-49', min: 45, max: 50 },
-  { label: '50-54', min: 50, max: 55 },
-  { label: '55-59', min: 55, max: 60 },
-  { label: '60-64', min: 60, max: 65 },
-  { label: '65-69', min: 65, max: 70 },
-  { label: '70-74', min: 70, max: 75 },
-  { label: '75-79', min: 75, max: 80 },
-  { label: '80-84', min: 80, max: 85 },
-  { label: '85+',   min: 85, max: Infinity },
-]
+// AGE_BINS_CONTINUOUS removed — continuous tab now uses 1-year bins computed inline
 
 const HBAIC_BINS = [
   { label: '<5.0',     min: 0,   max: 5.0,  category: 'Normal' },
@@ -200,12 +184,12 @@ function EnrollmentTrendChart({
           <CartesianGrid {...RECHARTS_THEME.grid} />
           <XAxis
             dataKey="label"
-            tick={{ ...RECHARTS_THEME.axis, fill: '#475569' }}
+            tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
             axisLine={{ stroke: COLORS.gray200 }}
             tickLine={false}
           />
           <YAxis
-            tick={{ ...RECHARTS_THEME.axis, fill: '#475569' }}
+            tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
             axisLine={false}
             tickLine={false}
             width={40}
@@ -283,7 +267,7 @@ function DemographicsPyramid({ demographics }: { demographics: DemographicStats 
             type="number"
             domain={[-domainMax, domainMax]}
             tickFormatter={(v: number) => Math.abs(v).toString()}
-            tick={{ ...RECHARTS_THEME.axis, fill: '#475569' }}
+            tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
             axisLine={{ stroke: COLORS.gray200 }}
             tickLine={false}
           />
@@ -384,7 +368,7 @@ function SiteDistributionChart({
           <CartesianGrid {...RECHARTS_THEME.grid} horizontal={false} />
           <XAxis
             type="number"
-            tick={{ ...RECHARTS_THEME.axis, fill: '#475569' }}
+            tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
             axisLine={{ stroke: COLORS.gray200 }}
             tickLine={false}
           />
@@ -443,11 +427,6 @@ function AgeGroupChart({ demographics }: { demographics: DemographicStats }) {
 
   const histogramData = useMemo(
     () => binValues(demographics.age_distribution, AGE_BINS_STUDY),
-    [demographics.age_distribution],
-  )
-
-  const continuousData = useMemo(
-    () => binValues(demographics.age_distribution, AGE_BINS_CONTINUOUS),
     [demographics.age_distribution],
   )
 
@@ -546,12 +525,12 @@ function AgeGroupChart({ demographics }: { demographics: DemographicStats }) {
             <CartesianGrid {...RECHARTS_THEME.grid} />
             <XAxis
               dataKey="name"
-              tick={{ ...RECHARTS_THEME.axis, fill: '#475569' }}
+              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
               axisLine={{ stroke: COLORS.gray200 }}
               tickLine={false}
             />
             <YAxis
-              tick={{ ...RECHARTS_THEME.axis, fill: '#475569' }}
+              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
               axisLine={false}
               tickLine={false}
               width={40}
@@ -582,13 +561,13 @@ function AgeGroupChart({ demographics }: { demographics: DemographicStats }) {
             <CartesianGrid {...RECHARTS_THEME.grid} />
             <XAxis
               dataKey="label"
-              tick={{ ...RECHARTS_THEME.axis, fill: '#475569' }}
+              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
               axisLine={{ stroke: COLORS.gray200 }}
               tickLine={false}
-              label={{ value: 'Age (years)', position: 'insideBottom', offset: -12, style: { fontSize: 10, fill: '#475569' } }}
+              label={{ value: 'Age (years)', position: 'insideBottom', offset: -12, style: { fontSize: 10, fill: '#1E293B' } }}
             />
             <YAxis
-              tick={{ ...RECHARTS_THEME.axis, fill: '#475569' }}
+              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
               axisLine={false}
               tickLine={false}
               width={40}
@@ -604,43 +583,70 @@ function AgeGroupChart({ demographics }: { demographics: DemographicStats }) {
         </ResponsiveContainer>
       )}
 
-      {view === 'continuous' && (
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={continuousData}
-            margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
-            barCategoryGap="2%"
-          >
-            <defs>
-              <linearGradient id="ageContinuousGrad" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor={COLORS.primary} stopOpacity={0.8} />
-                <stop offset="100%" stopColor={COLORS.teal} stopOpacity={0.6} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid {...RECHARTS_THEME.grid} />
-            <XAxis
-              dataKey="label"
-              tick={{ ...RECHARTS_THEME.axis, fill: '#475569' }}
-              axisLine={{ stroke: COLORS.gray200 }}
-              tickLine={false}
-              label={{ value: 'Age (years)', position: 'insideBottom', offset: -12, style: { fontSize: 10, fill: '#475569' } }}
-            />
-            <YAxis
-              tick={{ ...RECHARTS_THEME.axis, fill: '#475569' }}
-              axisLine={false}
-              tickLine={false}
-              width={40}
-            />
-            <Tooltip content={<ChartTooltip />} />
-            <Bar
-              dataKey="count"
-              name="Participants"
-              fill="url(#ageContinuousGrad)"
-              radius={[2, 2, 0, 0]}
-            />
-          </BarChart>
-        </ResponsiveContainer>
-      )}
+      {view === 'continuous' && (() => {
+        // True continuous histogram: 1-year bins from raw age values
+        const minAge = Math.floor(Math.min(...demographics.age_distribution, 18))
+        const maxAge = Math.ceil(Math.max(...demographics.age_distribution, 90))
+        const yearBins = Array.from({ length: maxAge - minAge + 1 }, (_, i) => {
+          const age = minAge + i
+          return {
+            age,
+            count: demographics.age_distribution.filter(v => Math.floor(v) === age).length,
+          }
+        }).filter(b => b.age >= 18 && b.age <= 95)
+
+        return (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={yearBins}
+              margin={{ top: 10, right: 10, left: 0, bottom: 24 }}
+              barCategoryGap={0}
+              barGap={0}
+            >
+              <defs>
+                <linearGradient id="ageContinuousGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor={COLORS.primary} stopOpacity={0.85} />
+                  <stop offset="100%" stopColor={COLORS.teal} stopOpacity={0.65} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid {...RECHARTS_THEME.grid} vertical={false} />
+              <XAxis
+                dataKey="age"
+                type="number"
+                domain={[18, 95]}
+                tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+                axisLine={{ stroke: '#CBD5E1' }}
+                tickLine={false}
+                label={{ value: 'Age (years)', position: 'insideBottom', offset: -14, style: { fontSize: 11, fill: '#1E293B', fontWeight: 500 } }}
+              />
+              <YAxis
+                tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+                axisLine={false}
+                tickLine={false}
+                width={35}
+                label={{ value: 'Count', angle: -90, position: 'insideLeft', offset: 10, style: { fontSize: 11, fill: '#1E293B', fontWeight: 500 } }}
+              />
+              <Tooltip
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null
+                  const d = payload[0]?.payload
+                  return (
+                    <div style={RECHARTS_THEME.tooltip.contentStyle} className="px-3 py-2">
+                      <p className="text-xs font-semibold text-gray-800">Age {d?.age}</p>
+                      <p className="text-xs text-gray-600">{d?.count} participant{d?.count !== 1 ? 's' : ''}</p>
+                    </div>
+                  )
+                }}
+              />
+              <Bar
+                dataKey="count"
+                fill="url(#ageContinuousGrad)"
+                radius={0}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        )
+      })()}
     </ChartCard>
   )
 }
@@ -738,12 +744,12 @@ function GenderChart({ data }: { data: Array<{ sex: string; count: number }> }) 
             <CartesianGrid {...RECHARTS_THEME.grid} />
             <XAxis
               dataKey="name"
-              tick={{ ...RECHARTS_THEME.axis, fill: '#475569' }}
+              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
               axisLine={{ stroke: COLORS.gray200 }}
               tickLine={false}
             />
             <YAxis
-              tick={{ ...RECHARTS_THEME.axis, fill: '#475569' }}
+              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
               axisLine={false}
               tickLine={false}
               width={40}
@@ -856,12 +862,12 @@ function UrbanRuralChart({
             <CartesianGrid {...RECHARTS_THEME.grid} />
             <XAxis
               dataKey="name"
-              tick={{ ...RECHARTS_THEME.axis, fill: '#475569' }}
+              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
               axisLine={{ stroke: COLORS.gray200 }}
               tickLine={false}
             />
             <YAxis
-              tick={{ ...RECHARTS_THEME.axis, fill: '#475569' }}
+              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
               axisLine={false}
               tickLine={false}
               width={40}
@@ -1010,12 +1016,12 @@ function HbA1cChart({ demographics }: { demographics: DemographicStats }) {
             <CartesianGrid {...RECHARTS_THEME.grid} />
             <XAxis
               dataKey="name"
-              tick={{ ...RECHARTS_THEME.axis, fill: '#475569' }}
+              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
               axisLine={{ stroke: COLORS.gray200 }}
               tickLine={false}
             />
             <YAxis
-              tick={{ ...RECHARTS_THEME.axis, fill: '#475569' }}
+              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
               axisLine={false}
               tickLine={false}
               width={40}
@@ -1040,18 +1046,18 @@ function HbA1cChart({ demographics }: { demographics: DemographicStats }) {
             <CartesianGrid {...RECHARTS_THEME.grid} />
             <XAxis
               dataKey="label"
-              tick={{ ...RECHARTS_THEME.axis, fill: '#475569' }}
+              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
               axisLine={{ stroke: COLORS.gray200 }}
               tickLine={false}
               label={{
                 value: 'HbA1c (%)',
                 position: 'insideBottom',
                 offset: -12,
-                style: { fontSize: 10, fill: '#475569' },
+                style: { fontSize: 10, fill: '#1E293B' },
               }}
             />
             <YAxis
-              tick={{ ...RECHARTS_THEME.axis, fill: '#475569' }}
+              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
               axisLine={false}
               tickLine={false}
               width={40}
