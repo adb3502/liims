@@ -168,14 +168,28 @@ function MapTabs({ siteMarkers, enrollmentLoading }: {
     staleTime: 5 * 60_000,
   })
 
-  const participantDots = useMemo(() => {
+  // Group participants by pin code → bubble plot (bigger = more participants)
+  const pinCodeBubbles = useMemo(() => {
     if (!locationData?.locations) return []
-    return locationData.locations.map((loc, i) => ({
-      lat: loc.lat + (Math.sin(i * 2.1) * 0.002),
-      lng: loc.lng + (Math.cos(i * 3.7) * 0.002),
-      color: SITE_COLORS[Object.keys(SITE_COORDINATES).indexOf(loc.site_code) % SITE_COLORS.length] || COLORS.primary,
-      source: loc.source,
-    }))
+    const groups = new Map<string, { lat: number; lng: number; count: number; pinCode: string; siteCode: string; source: string }>()
+    for (const loc of locationData.locations) {
+      // Group key: rounded lat/lng to ~500m grid (prevents overlapping bubbles for same pin code)
+      const key = loc.pin_code || `site-${loc.site_code}`
+      const existing = groups.get(key)
+      if (existing) {
+        existing.count++
+      } else {
+        groups.set(key, {
+          lat: loc.lat,
+          lng: loc.lng,
+          count: 1,
+          pinCode: loc.pin_code || loc.site_code,
+          siteCode: loc.site_code,
+          source: loc.source,
+        })
+      }
+    }
+    return Array.from(groups.values())
   }, [locationData])
 
   return (
@@ -249,43 +263,40 @@ function MapTabs({ siteMarkers, enrollmentLoading }: {
               url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
               attribution='&copy; <a href="https://carto.com/">CARTO</a>'
             />
-            {participantDots.map((dot, i) => (
-              <CircleMarker
-                key={`p-${i}`}
-                center={[dot.lat, dot.lng]}
-                radius={dot.source === 'pin_code' ? 4 : 2.5}
-                pathOptions={dot.source === 'pin_code' ? {
-                  fillColor: dot.color,
-                  fillOpacity: 0.7,
-                  stroke: false,
-                } : {
-                  fillColor: dot.color,
-                  fillOpacity: 0.3,
-                  stroke: false,
-                }}
-              />
-            ))}
-            {/* Site markers as larger reference points */}
-            {siteMarkers.map((site) => (
-              <CircleMarker
-                key={`site-${site.code}`}
-                center={[site.lat, site.lng]}
-                radius={8}
-                pathOptions={{
-                  fillColor: site.color,
-                  fillOpacity: 0.9,
-                  color: '#fff',
-                  weight: 2,
-                }}
-              >
-                <Popup>
-                  <div className="text-xs">
-                    <p className="font-semibold">{site.name}</p>
-                    <p className="text-gray-500">{site.count} participants</p>
-                  </div>
-                </Popup>
-              </CircleMarker>
-            ))}
+            {/* Pin code bubble plot — size = participant count */}
+            {pinCodeBubbles.map((bubble, i) => {
+              const siteIdx = Object.keys(SITE_COORDINATES).indexOf(bubble.siteCode)
+              const color = SITE_COLORS[siteIdx >= 0 ? siteIdx % SITE_COLORS.length : 0]
+              const radius = Math.max(5, Math.sqrt(bubble.count) * 4)
+              return (
+                <CircleMarker
+                  key={`pin-${i}`}
+                  center={[bubble.lat, bubble.lng]}
+                  radius={radius}
+                  pathOptions={{
+                    fillColor: color,
+                    fillOpacity: 0.65,
+                    color: color,
+                    weight: 1.5,
+                    opacity: 0.8,
+                  }}
+                >
+                  <Popup>
+                    <div className="text-xs space-y-1">
+                      <p className="font-semibold text-gray-900">
+                        {bubble.source === 'pin_code' ? `PIN ${bubble.pinCode}` : `${SITE_COORDINATES[bubble.siteCode]?.name || bubble.siteCode} area`}
+                      </p>
+                      <p className="text-gray-600">
+                        <span className="font-bold tabular-nums">{bubble.count}</span> participant{bubble.count !== 1 ? 's' : ''}
+                      </p>
+                      <p className="text-gray-400 text-[10px]">
+                        Site: {SITE_COORDINATES[bubble.siteCode]?.name || bubble.siteCode}
+                      </p>
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              )
+            })}
           </MapContainer>
         )}
       </div>
