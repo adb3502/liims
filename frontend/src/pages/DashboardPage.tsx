@@ -487,13 +487,13 @@ export function DashboardPage() {
               <CartesianGrid {...RECHARTS_THEME.grid} />
               <XAxis
                 dataKey="dateLabel"
-                {...RECHARTS_THEME.axis}
+                tick={{ fontSize: 11, fill: '#1E293B', fontFamily: '"Red Hat Display", sans-serif' }}
                 tickLine={false}
                 axisLine={false}
                 interval="preserveStartEnd"
               />
               <YAxis
-                {...RECHARTS_THEME.axis}
+                tick={{ fontSize: 11, fill: '#1E293B', fontFamily: '"Red Hat Display", sans-serif' }}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v: number) => formatNumber(v)}
@@ -535,7 +535,7 @@ export function DashboardPage() {
             <CartesianGrid {...RECHARTS_THEME.grid} horizontal={false} />
             <XAxis
               type="number"
-              {...RECHARTS_THEME.axis}
+              tick={{ fontSize: 11, fill: '#1E293B', fontFamily: '"Red Hat Display", sans-serif' }}
               tickLine={false}
               axisLine={false}
               tickFormatter={(v: number) => formatNumber(v)}
@@ -543,7 +543,7 @@ export function DashboardPage() {
             <YAxis
               type="category"
               dataKey="site_name"
-              {...RECHARTS_THEME.axis}
+              tick={{ fontSize: 11, fill: '#1E293B', fontFamily: '"Red Hat Display", sans-serif' }}
               tickLine={false}
               axisLine={false}
               width={160}
