@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/auth'
+import api from '@/lib/api'
 import { useDashboardOverview, useDashboardEnrollment } from '@/api/dashboard'
 import { StatCard, StatCardSkeleton } from '@/components/ui/stat-card'
 import { ChartCard } from '@/components/ui/chart-card'
@@ -48,16 +50,7 @@ function bubbleRadius(count: number): number {
 // ODK clinical_data JSONB contains demographics.residential_area (urban/rural) but
 // NO lat/lng coordinates. Dots are always site-approximate — never implying real location.
 // Spread of 0.005° ≈ 550m, appropriate for a collection site catchment area.
-function jitteredCoord(
-  base: number,
-  index: number,
-  spread: number,
-  axis: number,
-): number {
-  // Deterministic pseudo-random using sin — stable across re-renders
-  const h = Math.sin(index * 127.1 + axis * 311.7) * 43758.5453
-  return base + (h - Math.floor(h) - 0.5) * spread
-}
+// jitteredCoord removed — now using pin code geocoding from backend API
 
 interface SiteMarker {
   code: string
@@ -76,29 +69,28 @@ interface SiteMapProps {
 function SiteMap({ markers }: SiteMapProps) {
   const [showParticipants, setShowParticipants] = useState(false)
 
-  // Generate one dot per participant jittered within ~0.005° (~550m) of site center.
-  // urban flag from SITE_COORDINATES is used as a site-level proxy for residential_area
-  // (participant.clinical_data.demographics.residential_area is per-participant but not
-  // available at this layer without a dedicated API endpoint).
+  // Fetch real participant locations from pin code geocoding API
+  const { data: locationData } = useQuery({
+    queryKey: ['participant-locations'],
+    queryFn: async () => {
+      const res = await api.get<{ success: true; data: { locations: Array<{ lat: number; lng: number; pin_code: string | null; site_code: string; source: string }>; summary: { total: number; pin_code_matched: number; site_fallback: number } } }>('/participant-locations')
+      return res.data.data
+    },
+    enabled: showParticipants,
+    staleTime: 5 * 60_000,
+  })
+
   const participantDots = useMemo(() => {
-    if (!showParticipants) return []
-    const dots: Array<{ lat: number; lng: number; color: string; urban: boolean }> = []
-    for (const marker of markers) {
-      const coord = SITE_COORDINATES[marker.code]
-      if (!coord) continue
-      // 0.005° ≈ 550m — reflects realistic scatter without implying GPS precision
-      const spread = 0.005
-      for (let i = 0; i < marker.count; i++) {
-        dots.push({
-          lat: jitteredCoord(marker.lat, i, spread, 0),
-          lng: jitteredCoord(marker.lng, i, spread, 1),
-          color: marker.color,
-          urban: coord.urban,
-        })
-      }
-    }
-    return dots
-  }, [showParticipants, markers])
+    if (!showParticipants || !locationData?.locations) return []
+    // Add small jitter to prevent exact overlaps at same pin code
+    return locationData.locations.map((loc, i) => ({
+      lat: loc.lat + (Math.sin(i * 2.1) * 0.003),
+      lng: loc.lng + (Math.cos(i * 3.7) * 0.003),
+      color: SITE_COLORS[Object.keys(SITE_COORDINATES).indexOf(loc.site_code) % SITE_COLORS.length] || COLORS.primary,
+      source: loc.source,
+      pinCode: loc.pin_code,
+    }))
+  }, [showParticipants, locationData])
 
   return (
     <div className="relative h-full w-full">
@@ -119,8 +111,10 @@ function SiteMap({ markers }: SiteMapProps) {
 
       {showParticipants && (
         <div className="absolute bottom-2 left-2 z-[500] rounded-lg bg-amber-50/90 backdrop-blur-sm border border-amber-200 px-2.5 py-1.5 text-[10px] text-amber-700 max-w-[220px] space-y-0.5">
-          <p className="font-medium">Individual locations approximated from collection site</p>
-          <p className="text-amber-600">Filled = urban site &nbsp;&bull;&nbsp; Hollow = rural site</p>
+          <p className="font-medium">
+            {locationData ? `${locationData.summary.pin_code_matched} from pin code, ${locationData.summary.site_fallback} from site` : 'Loading locations...'}
+          </p>
+          <p className="text-amber-600">Filled = pin code geocoded &nbsp;&bull;&nbsp; Hollow = site approximation</p>
         </div>
       )}
 
@@ -136,24 +130,24 @@ function SiteMap({ markers }: SiteMapProps) {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
         />
 
-        {/* Individual participant dots — filled = urban site, hollow = rural site */}
+        {/* Individual participant dots — filled = pin_code geocoded, hollow = site fallback */}
         {showParticipants && participantDots.map((dot, i) => (
           <CircleMarker
             key={`pt-${i}`}
             center={[dot.lat, dot.lng]}
-            radius={3}
-            pathOptions={dot.urban ? {
-              // Urban: filled dot
+            radius={dot.source === 'pin_code' ? 3.5 : 2.5}
+            pathOptions={dot.source === 'pin_code' ? {
+              // Pin code geocoded: filled dot
               fillColor: dot.color,
-              fillOpacity: 0.6,
+              fillOpacity: 0.7,
               stroke: false,
             } : {
-              // Rural: hollow dot (stroke only)
+              // Site fallback: hollow dot
               fillColor: 'transparent',
               fillOpacity: 0,
               color: dot.color,
               weight: 1.5,
-              opacity: 0.7,
+              opacity: 0.5,
             }}
           />
         ))}
