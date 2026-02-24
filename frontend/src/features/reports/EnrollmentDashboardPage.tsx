@@ -509,17 +509,19 @@ function EnrollmentMatrixTable() {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {sites.map((site) => {
-              const siteTotal = totals.by_site[site]
+              const siteCode = typeof site === 'string' ? site : site.code
+              const siteName = typeof site === 'string' ? site : (site.name || site.code)
+              const siteTotal = totals.by_site[siteCode]
               const sitePct = siteTotal && siteTotal.target > 0
                 ? Math.min((siteTotal.count / siteTotal.target) * 100, 100)
                 : 0
               return (
-                <tr key={site} className="hover:bg-gray-50 transition-colors">
+                <tr key={siteCode} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-2 font-semibold text-gray-800 whitespace-nowrap">
-                    {site}
+                    {siteName}
                   </td>
                   {group_codes.map((gc) => {
-                    const cell = matrix[site]?.[gc]
+                    const cell = matrix[siteCode]?.[gc]
                     const count = cell?.count ?? 0
                     const target = cell?.target ?? 0
                     const pct = target > 0 ? Math.min((count / target) * 100, 100) : 0

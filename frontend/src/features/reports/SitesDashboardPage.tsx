@@ -24,9 +24,9 @@ export function SitesDashboardPage() {
   // Fetch enrollment stats
   const { data: enrollmentStats, isLoading: enrollmentLoading } = useDashboardEnrollment()
 
-  // Fetch samples for counting
+  // Fetch samples for counting — use max allowed per_page
   const { data: samplesData, isLoading: samplesLoading } = useSamples({
-    per_page: 1000,
+    per_page: 100,
   })
 
   const isLoading = sitesLoading || enrollmentLoading || samplesLoading

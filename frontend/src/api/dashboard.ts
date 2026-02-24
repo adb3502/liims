@@ -74,8 +74,13 @@ export interface EnrollmentMatrixCell {
   target: number
 }
 
+export interface EnrollmentMatrixSite {
+  code: string
+  name: string
+}
+
 export interface EnrollmentMatrixStats {
-  sites: string[]
+  sites: EnrollmentMatrixSite[]
   group_codes: string[]
   matrix: Record<string, Record<string, EnrollmentMatrixCell>>
   totals: {
