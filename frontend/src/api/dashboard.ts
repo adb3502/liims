@@ -11,6 +11,10 @@ export interface DemographicStats {
   by_age_group: Array<{ age_group: string; count: number }>
   by_sex: Array<{ sex: string; count: number }>
   by_age_sex: Array<{ age_group: string; sex: string; count: number }>
+  urban_rural: { urban: number; rural: number }
+  hba1c_status: { normal: number; prediabetic: number; diabetic: number }
+  age_distribution: number[]
+  hba1c_distribution: number[]
 }
 
 export interface EnrollmentStats {
@@ -18,6 +22,7 @@ export interface EnrollmentStats {
   by_site: Array<{ site_name: string; site_code: string; count: number }>
   by_wave: Array<{ wave: number; count: number }>
   enrollment_rate_30d: Array<{ date: string; count: number }>
+  enrollment_over_time: Array<{ date: string; count: number }>
   recent_30d: number
   demographics?: DemographicStats
 }
