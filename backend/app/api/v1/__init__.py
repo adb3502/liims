@@ -25,6 +25,7 @@ from app.api.v1.sync import router as sync_router
 from app.api.v1.audit_logs import router as audit_logs_router
 from app.api.v1.data_explorer import router as data_explorer_router
 from app.api.v1.protocols import router as protocols_router
+from app.api.v1.participant_locations import router as participant_locations_router
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth_router)
@@ -50,3 +51,4 @@ api_router.include_router(sync_router)
 api_router.include_router(audit_logs_router)
 api_router.include_router(data_explorer_router)
 api_router.include_router(protocols_router)
+api_router.include_router(participant_locations_router)

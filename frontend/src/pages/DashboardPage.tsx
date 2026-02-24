@@ -300,9 +300,10 @@ export function DashboardPage() {
 
   // Enrollment time series
   const enrollmentTimeSeries = useMemo(() => {
-    if (!enrollment?.enrollment_rate_30d) return []
+    const timeData = enrollment?.enrollment_over_time ?? enrollment?.enrollment_rate_30d
+    if (!timeData) return []
     let cumulative = 0
-    return enrollment.enrollment_rate_30d.map((d) => {
+    return timeData.map((d) => {
       cumulative += d.count
       return {
         ...d,
@@ -310,7 +311,7 @@ export function DashboardPage() {
         dateLabel: formatDate(d.date),
       }
     })
-  }, [enrollment?.enrollment_rate_30d])
+  }, [enrollment?.enrollment_over_time, enrollment?.enrollment_rate_30d])
 
   return (
     <div className="space-y-6">
