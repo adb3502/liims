@@ -150,8 +150,8 @@ export function SitesDashboardPage() {
       {/* Site cards grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {collectionSites.map((site) => {
-          const stats = siteStatsMap.get(site.id) ?? { participantCount: 0, sampleCount: 0 }
-          const completionRate = getSiteCompletionRate(site.id)
+          const stats = siteStatsMap.get(site.code) ?? { participantCount: 0, sampleCount: 0 }
+          const completionRate = getSiteCompletionRate(site.code)
 
           return (
             <Card
@@ -281,8 +281,8 @@ export function SitesDashboardPage() {
             </TableHeader>
             <TableBody>
               {collectionSites.map((site) => {
-                const stats = siteStatsMap.get(site.id) ?? { participantCount: 0, sampleCount: 0 }
-                const completionRate = getSiteCompletionRate(site.id)
+                const stats = siteStatsMap.get(site.code) ?? { participantCount: 0, sampleCount: 0 }
+                const completionRate = getSiteCompletionRate(site.code)
 
                 return (
                   <TableRow
