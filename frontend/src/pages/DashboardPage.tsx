@@ -37,7 +37,6 @@ import {
   BarChart3,
   Calendar,
   ArrowRight,
-  MapPin,
 } from 'lucide-react'
 
 // ── Site bubble radius: perceptually accurate (area ∝ count) ──
@@ -67,92 +66,21 @@ interface SiteMapProps {
 }
 
 function SiteMap({ markers }: SiteMapProps) {
-  const [showParticipants, setShowParticipants] = useState(false)
-
-  // Fetch real participant locations from pin code geocoding API
-  const { data: locationData } = useQuery({
-    queryKey: ['participant-locations'],
-    queryFn: async () => {
-      const res = await api.get<{ success: true; data: { locations: Array<{ lat: number; lng: number; pin_code: string | null; site_code: string; source: string }>; summary: { total: number; pin_code_matched: number; site_fallback: number } } }>('/participant-locations')
-      return res.data.data
-    },
-    enabled: showParticipants,
-    staleTime: 5 * 60_000,
-  })
-
-  const participantDots = useMemo(() => {
-    if (!showParticipants || !locationData?.locations) return []
-    // Add small jitter to prevent exact overlaps at same pin code
-    return locationData.locations.map((loc, i) => ({
-      lat: loc.lat + (Math.sin(i * 2.1) * 0.003),
-      lng: loc.lng + (Math.cos(i * 3.7) * 0.003),
-      color: SITE_COLORS[Object.keys(SITE_COORDINATES).indexOf(loc.site_code) % SITE_COLORS.length] || COLORS.primary,
-      source: loc.source,
-      pinCode: loc.pin_code,
-    }))
-  }, [showParticipants, locationData])
 
   return (
-    <div className="relative h-full w-full">
-      {/* Toggle control */}
-      <div className="absolute top-2 right-2 z-[500] flex items-center gap-1.5 rounded-lg bg-white/90 backdrop-blur-sm border border-gray-200 px-2.5 py-1.5 shadow-sm">
-        <label className="flex items-center gap-1.5 cursor-pointer select-none text-[11px] text-gray-600">
-          <input
-            type="checkbox"
-            checked={showParticipants}
-            onChange={(e) => setShowParticipants(e.target.checked)}
-            className="h-3 w-3 rounded border-gray-300 accent-primary"
-            aria-label="Show individual participant locations"
-          />
-          <MapPin className="h-3 w-3 text-gray-400" />
-          Participants
-        </label>
-      </div>
+    <MapContainer
+      center={[13.1, 77.6]}
+      zoom={8}
+      className="h-full w-full rounded-lg z-0"
+      scrollWheelZoom={false}
+      attributionControl={false}
+    >
+      <TileLayer
+        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+        attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+      />
 
-      {showParticipants && (
-        <div className="absolute bottom-2 left-2 z-[500] rounded-lg bg-amber-50/90 backdrop-blur-sm border border-amber-200 px-2.5 py-1.5 text-[10px] text-amber-700 max-w-[220px] space-y-0.5">
-          <p className="font-medium">
-            {locationData ? `${locationData.summary.pin_code_matched} from pin code, ${locationData.summary.site_fallback} from site` : 'Loading locations...'}
-          </p>
-          <p className="text-amber-600">Filled = pin code geocoded &nbsp;&bull;&nbsp; Hollow = site approximation</p>
-        </div>
-      )}
-
-      <MapContainer
-        center={[13.1, 77.6]}
-        zoom={8}
-        className="h-full w-full rounded-lg z-0"
-        scrollWheelZoom={false}
-        attributionControl={false}
-      >
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-        />
-
-        {/* Individual participant dots — filled = pin_code geocoded, hollow = site fallback */}
-        {showParticipants && participantDots.map((dot, i) => (
-          <CircleMarker
-            key={`pt-${i}`}
-            center={[dot.lat, dot.lng]}
-            radius={dot.source === 'pin_code' ? 3.5 : 2.5}
-            pathOptions={dot.source === 'pin_code' ? {
-              // Pin code geocoded: filled dot
-              fillColor: dot.color,
-              fillOpacity: 0.7,
-              stroke: false,
-            } : {
-              // Site fallback: hollow dot
-              fillColor: 'transparent',
-              fillOpacity: 0,
-              color: dot.color,
-              weight: 1.5,
-              opacity: 0.5,
-            }}
-          />
-        ))}
-
-        {/* Site bubble markers */}
+      {/* Site bubble markers */}
         {markers.map((site) => (
           <CircleMarker
             key={site.code}
@@ -181,9 +109,10 @@ function SiteMap({ markers }: SiteMapProps) {
                   </span>
                 </div>
 
-                {/* Enrollment progress bar (target: 200 per site as study default) */}
+                {/* Enrollment progress bar — per-site targets from study design */}
                 {(() => {
-                  const target = 200
+                  const SITE_TARGETS: Record<string, number> = { BBH: 2000, RMH: 1000, SSSSMH: 1000, CHAF: 1000, BMC: 0, JSS: 0 }
+                  const target = SITE_TARGETS[site.code] ?? 1000
                   const pct = Math.min(100, Math.round((site.count / target) * 100))
                   return (
                     <div>
@@ -218,6 +147,148 @@ function SiteMap({ markers }: SiteMapProps) {
           </CircleMarker>
         ))}
       </MapContainer>
+  )
+}
+
+// ──── Map Tabs: Sites (Karnataka) | Participants (India) ────
+
+function MapTabs({ siteMarkers, enrollmentLoading }: {
+  siteMarkers: SiteMarker[]
+  enrollmentLoading: boolean
+}) {
+  const [tab, setTab] = useState<'sites' | 'participants'>('sites')
+
+  const { data: locationData, isLoading: locLoading } = useQuery({
+    queryKey: ['participant-locations'],
+    queryFn: async () => {
+      const res = await api.get<{ success: true; data: { locations: Array<{ lat: number; lng: number; pin_code: string | null; site_code: string; source: string }>; summary: { total: number; pin_code_matched: number; site_fallback: number } } }>('/participant-locations')
+      return res.data.data
+    },
+    enabled: tab === 'participants',
+    staleTime: 5 * 60_000,
+  })
+
+  const participantDots = useMemo(() => {
+    if (!locationData?.locations) return []
+    return locationData.locations.map((loc, i) => ({
+      lat: loc.lat + (Math.sin(i * 2.1) * 0.002),
+      lng: loc.lng + (Math.cos(i * 3.7) * 0.002),
+      color: SITE_COLORS[Object.keys(SITE_COORDINATES).indexOf(loc.site_code) % SITE_COLORS.length] || COLORS.primary,
+      source: loc.source,
+    }))
+  }, [locationData])
+
+  return (
+    <div className="rounded-xl bg-white border border-gray-100 overflow-hidden">
+      {/* Tab header */}
+      <div className="flex items-center justify-between px-5 pt-4 pb-2">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800">
+            {tab === 'sites' ? 'Collection Sites' : 'Participant Locations'}
+          </h3>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {tab === 'sites'
+              ? 'Bubble size = participant count. Click site for details.'
+              : locationData
+                ? `${locationData.summary.pin_code_matched} geocoded from pin code, ${locationData.summary.site_fallback} from site`
+                : 'Loading participant locations...'}
+          </p>
+        </div>
+        <div className="flex gap-0.5 rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+          <button
+            onClick={() => setTab('sites')}
+            className={cn(
+              'rounded-md px-3 py-1 text-[11px] font-medium transition-all',
+              tab === 'sites'
+                ? 'bg-white text-primary shadow-sm border border-gray-200'
+                : 'text-gray-500 hover:text-gray-700',
+            )}
+          >
+            Sites
+          </button>
+          <button
+            onClick={() => setTab('participants')}
+            className={cn(
+              'rounded-md px-3 py-1 text-[11px] font-medium transition-all',
+              tab === 'participants'
+                ? 'bg-white text-primary shadow-sm border border-gray-200'
+                : 'text-gray-500 hover:text-gray-700',
+            )}
+          >
+            Participants
+          </button>
+        </div>
+      </div>
+
+      {/* Map content */}
+      <div className="h-[400px] px-5 pb-5">
+        {tab === 'sites' ? (
+          enrollmentLoading ? (
+            <div className="flex h-full items-center justify-center">
+              <div className="h-8 w-8 rounded-full border-2 border-gray-200 border-t-primary animate-spin" />
+            </div>
+          ) : (
+            <SiteMap markers={siteMarkers} />
+          )
+        ) : locLoading ? (
+          <div className="flex h-full items-center justify-center">
+            <div className="flex flex-col items-center gap-2">
+              <div className="h-8 w-8 rounded-full border-2 border-gray-200 border-t-primary animate-spin" />
+              <span className="text-xs text-gray-400">Loading {siteMarkers.reduce((s, m) => s + m.count, 0)} participant locations...</span>
+            </div>
+          </div>
+        ) : (
+          <MapContainer
+            center={[22.5, 78.9]}
+            zoom={5}
+            className="h-full w-full rounded-lg z-0"
+            scrollWheelZoom={false}
+            attributionControl={false}
+          >
+            <TileLayer
+              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+              attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+            />
+            {participantDots.map((dot, i) => (
+              <CircleMarker
+                key={`p-${i}`}
+                center={[dot.lat, dot.lng]}
+                radius={dot.source === 'pin_code' ? 4 : 2.5}
+                pathOptions={dot.source === 'pin_code' ? {
+                  fillColor: dot.color,
+                  fillOpacity: 0.7,
+                  stroke: false,
+                } : {
+                  fillColor: dot.color,
+                  fillOpacity: 0.3,
+                  stroke: false,
+                }}
+              />
+            ))}
+            {/* Site markers as larger reference points */}
+            {siteMarkers.map((site) => (
+              <CircleMarker
+                key={`site-${site.code}`}
+                center={[site.lat, site.lng]}
+                radius={8}
+                pathOptions={{
+                  fillColor: site.color,
+                  fillOpacity: 0.9,
+                  color: '#fff',
+                  weight: 2,
+                }}
+              >
+                <Popup>
+                  <div className="text-xs">
+                    <p className="font-semibold">{site.name}</p>
+                    <p className="text-gray-500">{site.count} participants</p>
+                  </div>
+                </Popup>
+              </CircleMarker>
+            ))}
+          </MapContainer>
+        )}
+      </div>
     </div>
   )
 }
@@ -430,18 +501,8 @@ export function DashboardPage() {
           </ResponsiveContainer>
         </ChartCard>
 
-        {/* Site Map */}
-        <ChartCard
-          title="Collection Sites"
-          subtitle="Bubble size = participant count. Click a site for details."
-          loading={enrollmentLoading}
-          error={enrollmentError ? 'Failed to load site data' : undefined}
-          empty={!enrollmentLoading && !enrollmentError && siteMarkers.length === 0}
-          emptyMessage="No site data available"
-          height="h-[420px]"
-        >
-          <SiteMap markers={siteMarkers} />
-        </ChartCard>
+        {/* Map with tabs: Sites (Karnataka) | Participants (India) */}
+        <MapTabs siteMarkers={siteMarkers} enrollmentLoading={enrollmentLoading} />
       </div>
 
       {/* Site Distribution bar chart */}
