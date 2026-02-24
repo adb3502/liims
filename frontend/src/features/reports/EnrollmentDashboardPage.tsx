@@ -476,7 +476,12 @@ function EnrollmentMatrixTable() {
   }
 
   const { sites, group_codes, matrix, totals } = data
-  const grand = totals.grand
+  // Compute grand totals from by_site if backend doesn't provide totals.grand
+  const grand = (totals as Record<string, unknown>).grand as { count: number; target: number } | undefined
+    ?? Object.values(totals.by_site ?? {}).reduce(
+      (acc, s) => ({ count: acc.count + (s?.count ?? 0), target: acc.target + (s?.target ?? 0) }),
+      { count: 0, target: 0 }
+    )
   const grandPct = grand.target > 0 ? Math.min((grand.count / grand.target) * 100, 100) : 0
 
   return (
