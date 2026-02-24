@@ -17,7 +17,7 @@ from app.models.field_ops import FieldEvent, FieldEventParticipant
 from app.models.instrument import InstrumentRun
 from app.models.omics import IccProcessing, OmicsResult, OmicsResultSet
 from app.models.participant import CollectionSite, Participant
-from app.models.partner import PartnerLabImport, PartnerLabResult
+from app.models.partner import CanonicalTest, PartnerLabImport, PartnerLabResult
 from app.models.sample import Sample
 from app.models.storage import Freezer, StorageBox, StoragePosition, StorageRack
 
@@ -149,16 +149,102 @@ class DashboardService:
         )
         recent_30d = (await self.db.execute(recent_30d_q)).scalar_one()
 
+        # Enrollment over ALL time (monthly, not just 30 days)
+        month_expr = func.date_trunc("month", Participant.enrollment_date)
+        all_time_q = (
+            select(
+                month_expr.label("month"),
+                func.count(Participant.id).label("count"),
+            )
+            .where(Participant.is_deleted == False)  # noqa: E712
+            .group_by(month_expr)
+            .order_by(month_expr.asc())
+        )
+        all_time_rows = (await self.db.execute(all_time_q)).all()
+        enrollment_over_time = [
+            {"date": r[0].isoformat() if r[0] else None, "count": r[1]}
+            for r in all_time_rows
+        ]
+
+        # Urban vs Rural: derive from site code
+        # BBH, RMH, CHAF, BMC = urban; SSSSMH = rural
+        urban_sites = {"BBH", "RMH", "CHAF", "BMC", "JSS"}
+        rural_sites = {"SSSSMH"}
+        urban_count = sum(s["count"] for s in by_site if s["site_code"] in urban_sites)
+        rural_count = sum(s["count"] for s in by_site if s["site_code"] in rural_sites)
+
+        # HbA1c classification from lab results
+        # Normal: <5.7%, Prediabetic: 5.7-6.4%, Diabetic: >=6.5%
+        hba1c_q = await self.db.execute(select(
+            PartnerLabResult.test_value,
+            Participant.id,
+        ).join(
+            Participant, PartnerLabResult.participant_id == Participant.id
+        ).join(
+            CanonicalTest, PartnerLabResult.canonical_test_id == CanonicalTest.id
+        ).where(
+            CanonicalTest.canonical_name == "hba1c",
+            Participant.is_deleted == False,  # noqa: E712
+            PartnerLabResult.test_value.isnot(None),
+        ))
+        hba1c_normal = 0
+        hba1c_prediabetic = 0
+        hba1c_diabetic = 0
+        hba1c_values = []  # for distribution
+        seen_participants = set()
+        for row in hba1c_q.all():
+            try:
+                val = float(row[0])
+                pid = row[1]
+                if pid in seen_participants:
+                    continue
+                seen_participants.add(pid)
+                hba1c_values.append(val)
+                if val < 5.7:
+                    hba1c_normal += 1
+                elif val < 6.5:
+                    hba1c_prediabetic += 1
+                else:
+                    hba1c_diabetic += 1
+            except (ValueError, TypeError):
+                pass
+
+        # Continuous age distribution from clinical_data
+        age_values = []
+        age_q = await self.db.execute(
+            select(Participant.clinical_data["demographics"]["age"].as_string())
+            .where(
+                Participant.is_deleted == False,  # noqa: E712
+                Participant.clinical_data.isnot(None),
+            )
+        )
+        for row in age_q.scalars().all():
+            try:
+                age = float(row)
+                if 0 < age < 120:
+                    age_values.append(age)
+            except (ValueError, TypeError):
+                pass
+
         return {
             "total_participants": total,
             "by_site": by_site,
             "by_wave": by_wave,
             "enrollment_rate_30d": enrollment_rate,
+            "enrollment_over_time": enrollment_over_time,
             "recent_30d": recent_30d,
             "demographics": {
                 "by_age_group": by_age_group,
                 "by_sex": by_sex,
                 "by_age_sex": by_age_sex,
+                "urban_rural": {"urban": urban_count, "rural": rural_count},
+                "hba1c_status": {
+                    "normal": hba1c_normal,
+                    "prediabetic": hba1c_prediabetic,
+                    "diabetic": hba1c_diabetic,
+                },
+                "age_distribution": age_values,
+                "hba1c_distribution": hba1c_values,
             },
         }
 
