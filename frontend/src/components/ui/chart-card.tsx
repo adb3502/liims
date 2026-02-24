@@ -6,7 +6,7 @@ interface ChartCardProps {
   title: string
   subtitle?: string
   action?: React.ReactNode
-  children: React.ReactNode
+  children?: React.ReactNode
   className?: string
   fullWidth?: boolean
   loading?: boolean

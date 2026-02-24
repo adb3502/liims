@@ -319,7 +319,8 @@ export function DashboardPage() {
             />
             <RechartsTooltip
               contentStyle={RECHARTS_THEME.tooltip.contentStyle}
-              formatter={(value: number | string) => [Number(value).toLocaleString(), 'Participants']}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              formatter={(value: any) => [Number(value).toLocaleString(), 'Participants'] as any}
             />
             <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={28}>
               {siteData.map((entry) => (
@@ -328,7 +329,8 @@ export function DashboardPage() {
               <LabelList
                 dataKey="count"
                 position="right"
-                formatter={(v: number | string) => Number(v).toLocaleString()}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                formatter={(v: any) => Number(v).toLocaleString() as any}
                 style={{ fontSize: 11, fill: COLORS.gray600, fontWeight: 500 }}
               />
             </Bar>

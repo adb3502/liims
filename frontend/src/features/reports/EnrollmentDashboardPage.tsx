@@ -469,8 +469,8 @@ export function EnrollmentDashboardPage() {
           {Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
-          <ChartCard title="Enrollment Trend" loading />
-          <ChartCard title="Demographics Pyramid" loading />
+          <ChartCard title="Enrollment Trend" loading>{null}</ChartCard>
+          <ChartCard title="Demographics Pyramid" loading>{null}</ChartCard>
         </div>
       </div>
     )
@@ -567,7 +567,7 @@ export function EnrollmentDashboardPage() {
             subtitle="Age-sex distribution"
             empty
             emptyMessage="Demographic data not yet available from the API"
-          />
+          >{null}</ChartCard>
         )}
       </div>
 
@@ -577,12 +577,12 @@ export function EnrollmentDashboardPage() {
         {demographics ? (
           <AgeGroupDonut data={demographics.by_age_group} />
         ) : (
-          <ChartCard title="Age Distribution" empty emptyMessage="No data" height="h-72" />
+          <ChartCard title="Age Distribution" empty emptyMessage="No data" height="h-72">{null}</ChartCard>
         )}
         {demographics ? (
           <GenderDonut data={demographics.by_sex} />
         ) : (
-          <ChartCard title="Sex Distribution" empty emptyMessage="No data" height="h-72" />
+          <ChartCard title="Sex Distribution" empty emptyMessage="No data" height="h-72">{null}</ChartCard>
         )}
       </div>
     </div>

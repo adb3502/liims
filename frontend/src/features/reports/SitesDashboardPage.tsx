@@ -50,8 +50,8 @@ export function SitesDashboardPage() {
     sampleCount: number
   }>()
 
-  bySite.forEach(({ site_id, count }) => {
-    siteStatsMap.set(site_id, {
+  bySite.forEach(({ site_code, count }) => {
+    siteStatsMap.set(site_code, {
       participantCount: count,
       sampleCount: 0,
     })
@@ -173,12 +173,12 @@ export function SitesDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {bySite.map(({ site_id, site_name, count }) => {
+              {bySite.map(({ site_code, site_name, count }) => {
                 const totalEnrollment = bySite.reduce((sum, s) => sum + s.count, 0)
                 const percentage = totalEnrollment > 0 ? Math.round((count / totalEnrollment) * 100) : 0
 
                 return (
-                  <div key={site_id} className="space-y-2">
+                  <div key={site_code} className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span className="font-medium">{site_name}</span>
                       <span className="text-muted-foreground">
