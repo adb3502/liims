@@ -184,12 +184,12 @@ function EnrollmentTrendChart({
           <CartesianGrid {...RECHARTS_THEME.grid} />
           <XAxis
             dataKey="label"
-            tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+            tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
             axisLine={{ stroke: COLORS.gray200 }}
             tickLine={false}
           />
           <YAxis
-            tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+            tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
             axisLine={false}
             tickLine={false}
             width={40}
@@ -267,14 +267,14 @@ function DemographicsPyramid({ demographics }: { demographics: DemographicStats 
             type="number"
             domain={[-domainMax, domainMax]}
             tickFormatter={(v: number) => Math.abs(v).toString()}
-            tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+            tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
             axisLine={{ stroke: COLORS.gray200 }}
             tickLine={false}
           />
           <YAxis
             type="category"
             dataKey="ageGroup"
-            tick={{ ...RECHARTS_THEME.axis, fill: COLORS.gray500, fontWeight: 600 }}
+            tick={{ ...RECHARTS_THEME.tick, fill: '#000000', fontWeight: 600 }}
             axisLine={false}
             tickLine={false}
             width={50}
@@ -368,14 +368,14 @@ function SiteDistributionChart({
           <CartesianGrid {...RECHARTS_THEME.grid} horizontal={false} />
           <XAxis
             type="number"
-            tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+            tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
             axisLine={{ stroke: COLORS.gray200 }}
             tickLine={false}
           />
           <YAxis
             type="category"
             dataKey="shortName"
-            tick={{ ...RECHARTS_THEME.axis, fill: COLORS.gray500 }}
+            tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
             axisLine={false}
             tickLine={false}
             width={140}
@@ -525,12 +525,12 @@ function AgeGroupChart({ demographics }: { demographics: DemographicStats }) {
             <CartesianGrid {...RECHARTS_THEME.grid} />
             <XAxis
               dataKey="name"
-              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+              tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
               axisLine={{ stroke: COLORS.gray200 }}
               tickLine={false}
             />
             <YAxis
-              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+              tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
               axisLine={false}
               tickLine={false}
               width={40}
@@ -561,13 +561,13 @@ function AgeGroupChart({ demographics }: { demographics: DemographicStats }) {
             <CartesianGrid {...RECHARTS_THEME.grid} />
             <XAxis
               dataKey="label"
-              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+              tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
               axisLine={{ stroke: COLORS.gray200 }}
               tickLine={false}
-              label={{ value: 'Age (years)', position: 'insideBottom', offset: -12, style: { fontSize: 10, fill: '#1E293B' } }}
+              label={{ value: 'Age (years)', position: 'insideBottom', offset: -12, style: { fontSize: 10, fill: '#000000' } }}
             />
             <YAxis
-              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+              tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
               axisLine={false}
               tickLine={false}
               width={40}
@@ -614,17 +614,17 @@ function AgeGroupChart({ demographics }: { demographics: DemographicStats }) {
                 dataKey="age"
                 type="number"
                 domain={[18, 95]}
-                tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+                tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
                 axisLine={{ stroke: '#CBD5E1' }}
                 tickLine={false}
-                label={{ value: 'Age (years)', position: 'insideBottom', offset: -14, style: { fontSize: 11, fill: '#1E293B', fontWeight: 500 } }}
+                label={{ value: 'Age (years)', position: 'insideBottom', offset: -14, style: { fontSize: 11, fill: '#000000', fontWeight: 500 } }}
               />
               <YAxis
-                tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+                tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
                 axisLine={false}
                 tickLine={false}
                 width={35}
-                label={{ value: 'Count', angle: -90, position: 'insideLeft', offset: 10, style: { fontSize: 11, fill: '#1E293B', fontWeight: 500 } }}
+                label={{ value: 'Count', angle: -90, position: 'insideLeft', offset: 10, style: { fontSize: 11, fill: '#000000', fontWeight: 500 } }}
               />
               <Tooltip
                 content={({ active, payload }) => {
@@ -744,12 +744,12 @@ function GenderChart({ data }: { data: Array<{ sex: string; count: number }> }) 
             <CartesianGrid {...RECHARTS_THEME.grid} />
             <XAxis
               dataKey="name"
-              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+              tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
               axisLine={{ stroke: COLORS.gray200 }}
               tickLine={false}
             />
             <YAxis
-              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+              tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
               axisLine={false}
               tickLine={false}
               width={40}
@@ -862,12 +862,12 @@ function UrbanRuralChart({
             <CartesianGrid {...RECHARTS_THEME.grid} />
             <XAxis
               dataKey="name"
-              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+              tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
               axisLine={{ stroke: COLORS.gray200 }}
               tickLine={false}
             />
             <YAxis
-              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+              tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
               axisLine={false}
               tickLine={false}
               width={40}
@@ -1016,12 +1016,12 @@ function HbA1cChart({ demographics }: { demographics: DemographicStats }) {
             <CartesianGrid {...RECHARTS_THEME.grid} />
             <XAxis
               dataKey="name"
-              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+              tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
               axisLine={{ stroke: COLORS.gray200 }}
               tickLine={false}
             />
             <YAxis
-              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+              tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
               axisLine={false}
               tickLine={false}
               width={40}
@@ -1046,18 +1046,18 @@ function HbA1cChart({ demographics }: { demographics: DemographicStats }) {
             <CartesianGrid {...RECHARTS_THEME.grid} />
             <XAxis
               dataKey="label"
-              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+              tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
               axisLine={{ stroke: COLORS.gray200 }}
               tickLine={false}
               label={{
                 value: 'HbA1c (%)',
                 position: 'insideBottom',
                 offset: -12,
-                style: { fontSize: 10, fill: '#1E293B' },
+                style: { fontSize: 10, fill: '#000000' },
               }}
             />
             <YAxis
-              tick={{ ...RECHARTS_THEME.axis, fill: '#1E293B' }}
+              tick={{ ...RECHARTS_THEME.tick, fill: '#000000' }}
               axisLine={false}
               tickLine={false}
               width={40}

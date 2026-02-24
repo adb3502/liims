@@ -161,20 +161,20 @@ function MapTabs({ siteMarkers, enrollmentLoading }: {
   const { data: locationData, isLoading: locLoading } = useQuery({
     queryKey: ['participant-locations'],
     queryFn: async () => {
-      const res = await api.get<{ success: true; data: { locations: Array<{ lat: number; lng: number; pin_code: string | null; site_code: string; source: string }>; summary: { total: number; pin_code_matched: number; site_fallback: number } } }>('/participant-locations')
+      const res = await api.get<{ success: true; data: { locations: Array<{ lat: number; lng: number; pin_code: string | null; site_code: string; source: string }>; summary: { total: number; pin_code_matched: number; site_fallback: number } } }>('/participant-locations/')
       return res.data.data
     },
     enabled: tab === 'participants',
     staleTime: 5 * 60_000,
   })
 
-  // Group participants by pin code → bubble plot (bigger = more participants)
+  // Group participants by pin code + site → bubble plot (bigger = more participants)
   const pinCodeBubbles = useMemo(() => {
     if (!locationData?.locations) return []
     const groups = new Map<string, { lat: number; lng: number; count: number; pinCode: string; siteCode: string; source: string }>()
     for (const loc of locationData.locations) {
-      // Group key: rounded lat/lng to ~500m grid (prevents overlapping bubbles for same pin code)
-      const key = loc.pin_code || `site-${loc.site_code}`
+      // Group by pin+site so same PIN from different sites = separate bubbles
+      const key = loc.pin_code ? `${loc.pin_code}-${loc.site_code}` : `site-${loc.site_code}`
       const existing = groups.get(key)
       if (existing) {
         existing.count++
@@ -189,7 +189,21 @@ function MapTabs({ siteMarkers, enrollmentLoading }: {
         })
       }
     }
-    return Array.from(groups.values())
+    // Offset bubbles that share the same coordinates so they don't stack
+    const coordCounts = new Map<string, number>()
+    const result = Array.from(groups.values())
+    for (const b of result) {
+      const coordKey = `${b.lat},${b.lng}`
+      const idx = coordCounts.get(coordKey) || 0
+      if (idx > 0) {
+        // Spread in a small circle (~0.01° ≈ 1km offset)
+        const angle = (idx * 2 * Math.PI) / 6
+        b.lat += Math.cos(angle) * 0.015
+        b.lng += Math.sin(angle) * 0.015
+      }
+      coordCounts.set(coordKey, idx + 1)
+    }
+    return result
   }, [locationData])
 
   return (
@@ -267,7 +281,7 @@ function MapTabs({ siteMarkers, enrollmentLoading }: {
             {pinCodeBubbles.map((bubble, i) => {
               const siteIdx = Object.keys(SITE_COORDINATES).indexOf(bubble.siteCode)
               const color = SITE_COLORS[siteIdx >= 0 ? siteIdx % SITE_COLORS.length : 0]
-              const radius = Math.max(5, Math.sqrt(bubble.count) * 4)
+              const radius = Math.min(25, Math.max(4, Math.log2(bubble.count + 1) * 3))
               return (
                 <CircleMarker
                   key={`pin-${i}`}
@@ -487,13 +501,13 @@ export function DashboardPage() {
               <CartesianGrid {...RECHARTS_THEME.grid} />
               <XAxis
                 dataKey="dateLabel"
-                tick={{ fontSize: 11, fill: '#1E293B', fontFamily: '"Red Hat Display", sans-serif' }}
+                tick={{ fontSize: 11, fill: '#000000', fontFamily: '"Red Hat Display", sans-serif' }}
                 tickLine={false}
                 axisLine={false}
                 interval="preserveStartEnd"
               />
               <YAxis
-                tick={{ fontSize: 11, fill: '#1E293B', fontFamily: '"Red Hat Display", sans-serif' }}
+                tick={{ fontSize: 11, fill: '#000000', fontFamily: '"Red Hat Display", sans-serif' }}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v: number) => formatNumber(v)}
@@ -535,7 +549,7 @@ export function DashboardPage() {
             <CartesianGrid {...RECHARTS_THEME.grid} horizontal={false} />
             <XAxis
               type="number"
-              tick={{ fontSize: 11, fill: '#1E293B', fontFamily: '"Red Hat Display", sans-serif' }}
+              tick={{ fontSize: 11, fill: '#000000', fontFamily: '"Red Hat Display", sans-serif' }}
               tickLine={false}
               axisLine={false}
               tickFormatter={(v: number) => formatNumber(v)}
@@ -543,7 +557,7 @@ export function DashboardPage() {
             <YAxis
               type="category"
               dataKey="site_name"
-              tick={{ fontSize: 11, fill: '#1E293B', fontFamily: '"Red Hat Display", sans-serif' }}
+              tick={{ fontSize: 11, fill: '#000000', fontFamily: '"Red Hat Display", sans-serif' }}
               tickLine={false}
               axisLine={false}
               width={160}

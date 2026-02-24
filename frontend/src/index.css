@@ -283,10 +283,13 @@ body {
 
 /* ──── Recharts Overrides ──── */
 
-.recharts-cartesian-axis-tick-value {
+.recharts-cartesian-axis-tick-value,
+.recharts-cartesian-axis-tick text,
+.recharts-xAxis text,
+.recharts-yAxis text {
   font-family: var(--font-sans);
   font-size: 11px;
-  fill: #64748B;
+  fill: #000000 !important;
 }
 
 .recharts-legend-item-text {

@@ -275,14 +275,14 @@ function OmicsCoverageChart({
               type="number"
               domain={[0, 100]}
               tickFormatter={(v: number) => `${v}%`}
-              {...RECHARTS_THEME.axis}
+              tick={{ ...RECHARTS_THEME.tick }}
               tickLine={false}
               axisLine={false}
             />
             <YAxis
               type="category"
               dataKey="name"
-              {...RECHARTS_THEME.axis}
+              tick={{ ...RECHARTS_THEME.tick }}
               tickLine={false}
               axisLine={false}
               width={80}

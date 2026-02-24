@@ -121,7 +121,8 @@ export const DIVERGING_BWR = [
 
 export const RECHARTS_THEME = {
   grid: { stroke: '#E2E8F0', strokeDasharray: '3 3' },
-  axis: { stroke: '#CBD5E1', fontSize: 11, fontFamily: '"Red Hat Display", sans-serif', fill: '#1E293B', tick: { fill: '#1E293B' } },
+  axisLine: { stroke: '#CBD5E1' },
+  tick: { fontSize: 11, fontFamily: '"Red Hat Display", sans-serif', fill: '#000000', stroke: 'none' },
   tooltip: {
     contentStyle: {
       background: 'rgba(255,255,255,0.96)',
@@ -140,7 +141,7 @@ export const RECHARTS_THEME = {
 // ──── Plotly Layout Defaults ────
 
 export const PLOTLY_LAYOUT_DEFAULTS = {
-  font: { family: '"Red Hat Display", sans-serif', color: '#334155', size: 12 },
+  font: { family: '"Red Hat Display", sans-serif', color: '#1E293B', size: 12 },
   paper_bgcolor: 'transparent',
   plot_bgcolor: 'transparent',
   margin: { l: 60, r: 30, t: 40, b: 60 },

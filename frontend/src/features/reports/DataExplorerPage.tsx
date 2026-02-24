@@ -402,7 +402,7 @@ function DistributionTab({
       yref: 'paper' as const,
       text: `n=${g.n.toLocaleString()}`,
       showarrow: false,
-      font: { size: 10, color: '#64748B', family: '"Red Hat Display", sans-serif' },
+      font: { size: 10, color: '#1E293B', family: '"Red Hat Display", sans-serif' },
       xanchor: 'center' as const,
     }))
   }, [data, chartType])
