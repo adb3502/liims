@@ -137,7 +137,7 @@ export function useDataExplorerDistribution(
   return useQuery({
     queryKey: dataExplorerKeys.distribution(parameter, chartType, groupBy, filters),
     queryFn: async () => {
-      const params: Record<string, string> = { parameter }
+      const params: Record<string, string> = { parameter, group_by: groupBy }
       if (filters.age_groups?.length) params.age_group = filters.age_groups.join(',')
       if (filters.sex?.length) params.sex = filters.sex.join(',')
       const res = await api.get<{
@@ -145,14 +145,30 @@ export function useDataExplorerDistribution(
         data: {
           parameter: string;
           unit: string | null;
-          data: Array<{ value: number; age_group: number; sex: string; site_code: string | null; participant_code: string }>;
           stats: { n: number; mean: number | null; median: number | null; sd: number | null; min: number | null; max: number | null; q1: number | null; q3: number | null };
+          groups?: Array<{
+            group: string; label: string; n: number;
+            mean: number; median: number; sd: number;
+            q1: number; q3: number; min: number; max: number;
+            values: number[];
+          }>;
+          data?: Array<{ value: number; age_group: number; sex: string; site_code: string | null; participant_code: string }>;
         }
       }>('/data-explorer/distribution', { params })
       const raw = res.data.data
-      // Group data points by the selected groupBy field
+      // If backend returned server-side grouped data, use it directly
+      if (raw.groups && raw.groups.length > 0) {
+        return {
+          parameter: raw.parameter,
+          label: parameter,
+          unit: raw.unit || '',
+          chart_type: chartType,
+          groups: raw.groups,
+        } as DistributionResponse
+      }
+      // Fallback: client-side grouping for backward compatibility
       const groupMap = new Map<string, number[]>()
-      for (const pt of raw.data) {
+      for (const pt of (raw.data ?? [])) {
         let gKey: string
         if (groupBy === 'age_group') gKey = String(pt.age_group)
         else if (groupBy === 'sex') gKey = pt.sex
@@ -161,33 +177,23 @@ export function useDataExplorerDistribution(
         arr.push(pt.value)
         groupMap.set(gKey, arr)
       }
-      // Build DistributionResponse
       const groups = Array.from(groupMap.entries()).map(([group, values]) => {
         const sorted = [...values].sort((a, b) => a - b)
         const n = sorted.length
         const mean = n > 0 ? sorted.reduce((a, b) => a + b, 0) / n : 0
         const pctl = (p: number) => { const k = (n - 1) * p; const f = Math.floor(k); return sorted[f] + (k - f) * ((sorted[f + 1] ?? sorted[f]) - sorted[f]) }
         return {
-          group,
-          label: group,
-          n,
+          group, label: group, n,
           mean: Math.round(mean * 100) / 100,
           median: n > 0 ? Math.round(pctl(0.5) * 100) / 100 : 0,
           sd: n > 1 ? Math.round(Math.sqrt(sorted.reduce((s, v) => s + (v - mean) ** 2, 0) / (n - 1)) * 100) / 100 : 0,
           q1: n > 0 ? Math.round(pctl(0.25) * 100) / 100 : 0,
           q3: n > 0 ? Math.round(pctl(0.75) * 100) / 100 : 0,
-          min: sorted[0] ?? 0,
-          max: sorted[n - 1] ?? 0,
-          values: chartType === 'box' ? values : undefined,
+          min: sorted[0] ?? 0, max: sorted[n - 1] ?? 0,
+          values,
         }
       })
-      return {
-        parameter: raw.parameter,
-        label: parameter,
-        unit: raw.unit || '',
-        chart_type: chartType,
-        groups,
-      } as DistributionResponse
+      return { parameter: raw.parameter, label: parameter, unit: raw.unit || '', chart_type: chartType, groups } as DistributionResponse
     },
     enabled: enabled && !!parameter,
     staleTime: 60_000,
@@ -211,10 +217,15 @@ export function useDataExplorerCorrelation(
       if (filters.sex?.length) params.sex = filters.sex.join(',')
       const res = await api.get<{
         success: true;
-        data: { method: string; parameters: string[]; matrix: (number | null)[][]; p_values: (number | null)[][] }
+        data: {
+          method: string; parameters: string[]; matrix: (number | null)[][];
+          p_values: (number | null)[][]; adjusted_p_values?: (number | null)[][];
+          multiple_comparison_note?: string; n_observations?: number;
+        }
       }>('/data-explorer/correlation', { params })
       const raw = res.data.data
-      // Transform to CorrelationResponse
+      // Transform to CorrelationResponse — prefer adjusted p-values if available
+      const pMatrix = raw.adjusted_p_values ?? raw.p_values
       const cells: CorrelationCell[][] = raw.matrix.map((row, i) =>
         row.map((r, j) => ({
           param_x: raw.parameters[i],
@@ -222,8 +233,8 @@ export function useDataExplorerCorrelation(
           label_x: raw.parameters[i],
           label_y: raw.parameters[j],
           r: r ?? 0,
-          p_value: raw.p_values[i]?.[j] ?? 1,
-          n: 0,
+          p_value: pMatrix[i]?.[j] ?? 1,
+          n: raw.n_observations ?? 0,
         }))
       )
       return {
@@ -231,8 +242,9 @@ export function useDataExplorerCorrelation(
         parameters: raw.parameters,
         labels: raw.parameters,
         matrix: cells,
-        n_participants: 0,
-      } as CorrelationResponse
+        n_participants: raw.n_observations ?? 0,
+        multiple_comparison_note: raw.multiple_comparison_note,
+      } as CorrelationResponse & { multiple_comparison_note?: string }
     },
     enabled: enabled && parameters.length >= 2,
     staleTime: 60_000,

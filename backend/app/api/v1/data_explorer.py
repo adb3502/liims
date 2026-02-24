@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_role
 from app.database import get_db
-from app.models.enums import UserRole
+from app.models.enums import AgeGroup, Sex, UserRole
 from app.models.participant import CollectionSite, Participant
 from app.models.partner import CanonicalTest, PartnerLabResult
 from app.models.user import User
@@ -76,6 +76,20 @@ class DistributionStats(BaseModel):
     q3: float | None = None
 
 
+class DistributionGroup(BaseModel):
+    group: str
+    label: str
+    n: int
+    mean: float | None = None
+    median: float | None = None
+    sd: float | None = None
+    min: float | None = None
+    max: float | None = None
+    q1: float | None = None
+    q3: float | None = None
+    values: list[float]
+
+
 class DistributionResponse(BaseModel):
     parameter: str
     unit: str | None = None
@@ -88,7 +102,10 @@ class CorrelationResponse(BaseModel):
     parameters: list[str]
     matrix: list[list[float | None]]
     p_values: list[list[float | None]]
+    p_values_adjusted: list[list[float | None]]
+    correction_method: str
     n_observations: int
+    multiple_comparison_note: str
 
 
 class VitalStat(BaseModel):
@@ -238,6 +255,54 @@ def _normal_cdf(x: float) -> float:
     return 0.5 * (1 + m.erf(x / (2 ** 0.5)))
 
 
+def _bh_correction(
+    p_matrix: list[list[float | None]],
+    n_params: int,
+) -> list[list[float | None]]:
+    """Benjamini-Hochberg FDR correction on the upper triangle of a p-value matrix.
+
+    Returns a new matrix of the same shape with BH-adjusted p-values.
+    Diagonal entries remain 0.0; lower triangle mirrors upper triangle.
+    """
+    # Collect (i, j, p) for upper triangle (excluding diagonal)
+    pairs: list[tuple[int, int, float]] = []
+    for i in range(n_params):
+        for j in range(i + 1, n_params):
+            p = p_matrix[i][j]
+            if p is not None:
+                pairs.append((i, j, p))
+
+    n_tests = len(pairs)
+    # Build adjusted matrix filled with None
+    adj: list[list[float | None]] = [[None] * n_params for _ in range(n_params)]
+    for i in range(n_params):
+        adj[i][i] = 0.0
+
+    if n_tests == 0:
+        return adj
+
+    # Sort by p-value ascending; assign ranks 1..n_tests
+    sorted_pairs = sorted(pairs, key=lambda t: t[2])
+    adjusted_ps: dict[tuple[int, int], float] = {}
+    for rank, (i, j, p) in enumerate(sorted_pairs, start=1):
+        bh_p = min(1.0, p * n_tests / rank)
+        adjusted_ps[(i, j)] = bh_p
+
+    # Enforce monotonicity (step-up): walk from largest rank down, cap each value
+    # at the minimum of itself and all later values
+    running_min = 1.0
+    for _, (i, j, _) in enumerate(reversed(sorted_pairs)):
+        bh_p = adjusted_ps[(i, j)]
+        running_min = min(running_min, bh_p)
+        adjusted_ps[(i, j)] = round(running_min, 6)
+
+    for (i, j), ap in adjusted_ps.items():
+        adj[i][j] = ap
+        adj[j][i] = ap
+
+    return adj
+
+
 # --- Endpoints ---
 
 @router.get("/parameters", response_model=dict)
@@ -279,6 +344,56 @@ async def get_parameters(
     return {"success": True, "data": parameters}
 
 
+# Maps participant code letter to display label for group_by=sex
+_AGE_GROUP_LABELS = {
+    1: "18-29", 2: "30-44", 3: "45-59", 4: "60-74", 5: "75+",
+}
+_SEX_LABELS = {"A": "Male", "B": "Female", "M": "Male", "F": "Female"}
+_VALID_GROUP_BY = {"age_group", "sex", "site"}
+
+
+def _compute_grouped_stats(
+    data_points: list[DataPoint],
+    group_by: str,
+) -> list[dict]:
+    """Group data points and compute per-group stats including raw values array."""
+    groups: dict[str, list[float]] = {}
+    for dp in data_points:
+        if group_by == "age_group":
+            key = str(dp.age_group)
+        elif group_by == "sex":
+            # dp.sex is stored as A/B codes
+            key = dp.sex
+        else:  # site
+            key = dp.site_code or "unknown"
+        groups.setdefault(key, []).append(dp.value)
+
+    result = []
+    for group_key, vals in sorted(groups.items()):
+        stats = _compute_stats(vals)
+        if group_by == "age_group":
+            label = _AGE_GROUP_LABELS.get(int(group_key), group_key)
+        elif group_by == "sex":
+            label = _SEX_LABELS.get(group_key, group_key)
+        else:
+            label = group_key
+
+        result.append({
+            "group": group_key,
+            "label": label,
+            "n": stats.n,
+            "mean": stats.mean,
+            "median": stats.median,
+            "sd": stats.sd,
+            "min": stats.min,
+            "max": stats.max,
+            "q1": stats.q1,
+            "q3": stats.q3,
+            "values": vals,
+        })
+    return result
+
+
 @router.get("/distribution", response_model=dict)
 async def get_distribution(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -287,23 +402,47 @@ async def get_distribution(
     age_group: str | None = Query(None, description="Comma-separated age groups (1-5)"),
     sex: str | None = Query(None, description="Comma-separated sex codes (M,F or A,B)"),
     site: str | None = Query(None, max_length=20, description="Collection site code"),
+    group_by: str | None = Query(None, description="Group results by: age_group, sex, site"),
 ):
-    """Return data points for distribution charts with descriptive statistics."""
-    # Parse filter values
-    age_groups: list[int] | None = None
+    """Return data points for distribution charts with descriptive statistics.
+
+    When group_by is provided, groups the data and returns per-group stats
+    including raw values arrays for box plots.
+    """
+    if group_by is not None and group_by not in _VALID_GROUP_BY:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Invalid group_by value. Must be one of: {', '.join(sorted(_VALID_GROUP_BY))}",
+        )
+
+    # Parse filter values — convert ints to AgeGroup enum members to avoid .in_() crash
+    age_group_enums: list[AgeGroup] | None = None
     if age_group:
         try:
-            age_groups = [int(x.strip()) for x in age_group.split(",")]
+            raw_ints = [int(x.strip()) for x in age_group.split(",")]
         except ValueError:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid age_group values.")
+        try:
+            age_group_enums = [AgeGroup(i) for i in raw_ints]
+        except ValueError as exc:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"Age group out of range (1-5): {exc}",
+            )
 
-    # Map sex codes A/B to enum values M/F
-    sex_map = {"A": "M", "B": "F"}
+    # Normalize sex codes: accept A/B (participant convention) or M/F (enum value)
+    sex_map = {"A": Sex.MALE, "B": Sex.FEMALE, "M": Sex.MALE, "F": Sex.FEMALE}
     sex_reverse = {"M": "A", "F": "B"}
-    sex_values: list[str] | None = None
+    sex_enums: list[Sex] | None = None
     if sex:
         raw_sex = [x.strip().upper() for x in sex.split(",")]
-        sex_values = [sex_map.get(s, s) for s in raw_sex]
+        try:
+            sex_enums = [sex_map[s] for s in raw_sex]
+        except KeyError as exc:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"Invalid sex value: {exc}. Use M/F or A/B.",
+            )
 
     is_clinical = parameter in CLINICAL_PARAM_MAP
     unit: str | None = None
@@ -336,10 +475,10 @@ async def get_distribution(
             )
         )
 
-        if age_groups:
-            query = query.where(Participant.age_group.in_(age_groups))
-        if sex_values:
-            query = query.where(Participant.sex.in_(sex_values))
+        if age_group_enums:
+            query = query.where(Participant.age_group.in_(age_group_enums))
+        if sex_enums:
+            query = query.where(Participant.sex.in_(sex_enums))
         if site:
             query = query.where(CollectionSite.code == site)
 
@@ -350,10 +489,11 @@ async def get_distribution(
         for row in rows:
             val = _safe_float(row.value_str)
             if val is not None:
+                raw_sex_val = row.sex.value if hasattr(row.sex, "value") else row.sex
                 dp = DataPoint(
                     value=val,
-                    age_group=row.age_group.value if hasattr(row.age_group, 'value') else int(row.age_group),
-                    sex=sex_reverse.get(row.sex.value if hasattr(row.sex, 'value') else row.sex, row.sex),
+                    age_group=row.age_group.value if hasattr(row.age_group, "value") else int(row.age_group),
+                    sex=sex_reverse.get(raw_sex_val, raw_sex_val),
                     site_code=row.site_code,
                     participant_code=row.participant_code,
                 )
@@ -391,10 +531,10 @@ async def get_distribution(
             )
         )
 
-        if age_groups:
-            query = query.where(Participant.age_group.in_(age_groups))
-        if sex_values:
-            query = query.where(Participant.sex.in_(sex_values))
+        if age_group_enums:
+            query = query.where(Participant.age_group.in_(age_group_enums))
+        if sex_enums:
+            query = query.where(Participant.sex.in_(sex_enums))
         if site:
             query = query.where(CollectionSite.code == site)
 
@@ -405,10 +545,11 @@ async def get_distribution(
         for row in rows:
             val = _safe_float(row.test_value)
             if val is not None:
+                raw_sex_val = row.sex.value if hasattr(row.sex, "value") else row.sex
                 dp = DataPoint(
                     value=val,
-                    age_group=row.age_group.value if hasattr(row.age_group, 'value') else int(row.age_group),
-                    sex=sex_reverse.get(row.sex.value if hasattr(row.sex, 'value') else row.sex, row.sex),
+                    age_group=row.age_group.value if hasattr(row.age_group, "value") else int(row.age_group),
+                    sex=sex_reverse.get(raw_sex_val, raw_sex_val),
                     site_code=row.site_code,
                     participant_code=row.participant_code,
                 )
@@ -417,15 +558,17 @@ async def get_distribution(
 
     stats = _compute_stats(values_for_stats)
 
-    return {
-        "success": True,
-        "data": {
-            "parameter": parameter,
-            "unit": unit,
-            "data": [dp.model_dump() for dp in data_points],
-            "stats": stats.model_dump(),
-        },
+    response_data: dict = {
+        "parameter": parameter,
+        "unit": unit,
+        "data": [dp.model_dump() for dp in data_points],
+        "stats": stats.model_dump(),
     }
+
+    if group_by:
+        response_data["groups"] = _compute_grouped_stats(data_points, group_by)
+
+    return {"success": True, "data": response_data}
 
 
 @router.get("/correlation", response_model=dict)
@@ -532,6 +675,8 @@ async def get_correlation(
             p_values[i][j] = p
             p_values[j][i] = p
 
+    p_values_adjusted = _bh_correction(p_values, n_params)
+
     return {
         "success": True,
         "data": {
@@ -539,7 +684,13 @@ async def get_correlation(
             "parameters": param_names,
             "matrix": matrix,
             "p_values": p_values,
+            "p_values_adjusted": p_values_adjusted,
+            "correction_method": "benjamini_hochberg",
             "n_observations": n_observations,
+            "multiple_comparison_note": (
+                "Raw p-values are not corrected for multiple comparisons. "
+                "p_values_adjusted uses Benjamini-Hochberg FDR correction."
+            ),
         },
     }
 

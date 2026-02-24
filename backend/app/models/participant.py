@@ -18,7 +18,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
-from app.models.enums import AgeGroup, ConsentType, EnrollmentSource, Sex
+from app.models.enums import AgeGroup, ConsentType, EnrollmentDateSource, EnrollmentSource, Sex
 
 
 class CollectionSite(BaseModel):
@@ -62,6 +62,11 @@ class Participant(BaseModel):
     )
     enrollment_source: Mapped[EnrollmentSource] = mapped_column(
         default=EnrollmentSource.ODK,
+    )
+    enrollment_date_source: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="Audit trail: backfill_lab_date | backfill_odk | manual | bulk_import",
     )
     odk_submission_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     clinical_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

@@ -89,3 +89,14 @@ async def get_summary(
     svc = DashboardService(db)
     data = await svc.overview()
     return {"success": True, "data": data}
+
+
+@router.get("/enrollment-matrix", response_model=dict)
+async def get_enrollment_matrix(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
+):
+    """Return enrollment counts grouped by site × group_code with targets."""
+    svc = DashboardService(db)
+    data = await svc.enrollment_matrix()
+    return {"success": True, "data": data}

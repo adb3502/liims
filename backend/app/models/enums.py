@@ -24,6 +24,13 @@ class EnrollmentSource(str, enum.Enum):
     BULK_IMPORT = "bulk_import"
 
 
+class EnrollmentDateSource(str, enum.Enum):
+    BACKFILL_LAB_DATE = "backfill_lab_date"
+    BACKFILL_ODK = "backfill_odk"
+    MANUAL = "manual"
+    BULK_IMPORT = "bulk_import"
+
+
 class ConsentType(str, enum.Enum):
     HOUSEHOLD = "household"
     INDIVIDUAL = "individual"

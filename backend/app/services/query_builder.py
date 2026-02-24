@@ -89,7 +89,8 @@ _ENTITY_REGISTRY: dict[str, dict] = {
 }
 
 ALLOWED_OPERATORS = {
-    "eq", "ne", "gt", "lt", "gte", "lte", "like", "in", "is_null",
+    "eq", "ne", "gt", "lt", "gte", "lte", "like", "contains", "starts_with",
+    "in", "is_null", "between",
 }
 
 
@@ -129,10 +130,10 @@ class QueryBuilderService:
         sort_order: str = "desc",
         page: int = 1,
         per_page: int = 50,
-    ) -> tuple[list[dict], int]:
+    ) -> tuple[list[dict], int, list[str]]:
         """Build and execute a dynamic query safely.
 
-        Returns (rows_as_dicts, total_count).
+        Returns (rows_as_dicts, total_count, selected_column_names).
         """
         cfg = _ENTITY_REGISTRY.get(entity)
         if cfg is None:
@@ -215,7 +216,7 @@ class QueryBuilderService:
                 row_dict[col_name] = val
             data.append(row_dict)
 
-        return data, total
+        return data, total, select_cols
 
     async def export_csv(
         self,
@@ -226,7 +227,7 @@ class QueryBuilderService:
         sort_order: str = "desc",
     ) -> str:
         """Execute query and return CSV string (max 50000 rows)."""
-        data, _ = await self.execute_query(
+        data, _, _cols = await self.execute_query(
             entity=entity,
             filters=filters,
             columns=columns,
@@ -259,9 +260,16 @@ class QueryBuilderService:
             return query.where(col >= value)
         elif operator == "lte":
             return query.where(col <= value)
-        elif operator == "like":
+        elif operator in ("like", "contains"):
             safe = _escape_ilike(str(value))
             return query.where(col.ilike(f"%{safe}%"))
+        elif operator == "starts_with":
+            safe = _escape_ilike(str(value))
+            return query.where(col.ilike(f"{safe}%"))
+        elif operator == "between":
+            if not isinstance(value, list) or len(value) != 2:
+                raise ValueError("'between' operator requires a list with exactly 2 values.")
+            return query.where(col.between(value[0], value[1]))
         elif operator == "in":
             if not isinstance(value, list):
                 raise ValueError("'in' operator requires a list value.")

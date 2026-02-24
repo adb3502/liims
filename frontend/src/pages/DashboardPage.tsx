@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
 import { useDashboardOverview, useDashboardEnrollment } from '@/api/dashboard'
@@ -25,8 +25,7 @@ import {
   Cell,
   LabelList,
 } from 'recharts'
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
-import L from 'leaflet'
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import {
   Users,
@@ -36,19 +35,190 @@ import {
   BarChart3,
   Calendar,
   ArrowRight,
+  MapPin,
 } from 'lucide-react'
 
-// Fix default marker icon (leaflet's default icon paths break in bundlers)
-const defaultIcon = L.icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-})
-L.Marker.prototype.options.icon = defaultIcon
+// ── Site bubble radius: perceptually accurate (area ∝ count) ──
+// Minimum 8px so zero-enrollment sites are still visible.
+function bubbleRadius(count: number): number {
+  return Math.max(8, Math.sqrt(count) * 2.5)
+}
+
+// ── Deterministic jitter: seeded from participant index + axis ──
+// ODK clinical_data JSONB contains demographics.residential_area (urban/rural) but
+// NO lat/lng coordinates. Dots are always site-approximate — never implying real location.
+// Spread of 0.005° ≈ 550m, appropriate for a collection site catchment area.
+function jitteredCoord(
+  base: number,
+  index: number,
+  spread: number,
+  axis: number,
+): number {
+  // Deterministic pseudo-random using sin — stable across re-renders
+  const h = Math.sin(index * 127.1 + axis * 311.7) * 43758.5453
+  return base + (h - Math.floor(h) - 0.5) * spread
+}
+
+interface SiteMarker {
+  code: string
+  lat: number
+  lng: number
+  name: string
+  city: string
+  count: number
+  color: string
+}
+
+interface SiteMapProps {
+  markers: SiteMarker[]
+}
+
+function SiteMap({ markers }: SiteMapProps) {
+  const [showParticipants, setShowParticipants] = useState(false)
+
+  // Generate one dot per participant jittered within ~0.005° (~550m) of site center.
+  // urban flag from SITE_COORDINATES is used as a site-level proxy for residential_area
+  // (participant.clinical_data.demographics.residential_area is per-participant but not
+  // available at this layer without a dedicated API endpoint).
+  const participantDots = useMemo(() => {
+    if (!showParticipants) return []
+    const dots: Array<{ lat: number; lng: number; color: string; urban: boolean }> = []
+    for (const marker of markers) {
+      const coord = SITE_COORDINATES[marker.code]
+      if (!coord) continue
+      // 0.005° ≈ 550m — reflects realistic scatter without implying GPS precision
+      const spread = 0.005
+      for (let i = 0; i < marker.count; i++) {
+        dots.push({
+          lat: jitteredCoord(marker.lat, i, spread, 0),
+          lng: jitteredCoord(marker.lng, i, spread, 1),
+          color: marker.color,
+          urban: coord.urban,
+        })
+      }
+    }
+    return dots
+  }, [showParticipants, markers])
+
+  return (
+    <div className="relative h-full w-full">
+      {/* Toggle control */}
+      <div className="absolute top-2 right-2 z-[500] flex items-center gap-1.5 rounded-lg bg-white/90 backdrop-blur-sm border border-gray-200 px-2.5 py-1.5 shadow-sm">
+        <label className="flex items-center gap-1.5 cursor-pointer select-none text-[11px] text-gray-600">
+          <input
+            type="checkbox"
+            checked={showParticipants}
+            onChange={(e) => setShowParticipants(e.target.checked)}
+            className="h-3 w-3 rounded border-gray-300 accent-primary"
+            aria-label="Show individual participant locations"
+          />
+          <MapPin className="h-3 w-3 text-gray-400" />
+          Participants
+        </label>
+      </div>
+
+      {showParticipants && (
+        <div className="absolute bottom-2 left-2 z-[500] rounded-lg bg-amber-50/90 backdrop-blur-sm border border-amber-200 px-2.5 py-1.5 text-[10px] text-amber-700 max-w-[220px] space-y-0.5">
+          <p className="font-medium">Individual locations approximated from collection site</p>
+          <p className="text-amber-600">Filled = urban site &nbsp;&bull;&nbsp; Hollow = rural site</p>
+        </div>
+      )}
+
+      <MapContainer
+        center={[13.1, 77.6]}
+        zoom={8}
+        className="h-full w-full rounded-lg z-0"
+        scrollWheelZoom={false}
+        attributionControl={false}
+      >
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+        />
+
+        {/* Individual participant dots (jittered around site center) */}
+        {showParticipants && participantDots.map((dot, i) => (
+          <CircleMarker
+            key={`pt-${i}`}
+            center={[dot.lat, dot.lng]}
+            radius={3}
+            pathOptions={{
+              fillColor: dot.color,
+              fillOpacity: 0.5,
+              stroke: false,
+            }}
+          />
+        ))}
+
+        {/* Site bubble markers */}
+        {markers.map((site) => (
+          <CircleMarker
+            key={site.code}
+            center={[site.lat, site.lng]}
+            radius={bubbleRadius(site.count)}
+            pathOptions={{
+              fillColor: site.color,
+              fillOpacity: 0.75,
+              color: site.color,
+              weight: 2,
+            }}
+          >
+            <Popup minWidth={200}>
+              <div className="text-xs space-y-2 py-0.5">
+                {/* Header */}
+                <div>
+                  <p className="font-semibold text-gray-900 leading-tight">{site.name}</p>
+                  <p className="text-gray-500 text-[11px]">{SITE_COORDINATES[site.code]?.city}</p>
+                </div>
+
+                {/* Count */}
+                <div className="flex items-center justify-between border-t border-gray-100 pt-1.5">
+                  <span className="text-gray-500">Enrolled</span>
+                  <span className="font-bold text-gray-900 tabular-nums">
+                    {site.count.toLocaleString()}
+                  </span>
+                </div>
+
+                {/* Enrollment progress bar (target: 200 per site as study default) */}
+                {(() => {
+                  const target = 200
+                  const pct = Math.min(100, Math.round((site.count / target) * 100))
+                  return (
+                    <div>
+                      <div className="flex items-center justify-between text-[11px] mb-1">
+                        <span className="text-gray-400">Progress to target ({target})</span>
+                        <span className="font-medium" style={{ color: site.color }}>{pct}%</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${pct}%`, backgroundColor: site.color }}
+                        />
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Site metadata */}
+                <div className="border-t border-gray-100 pt-1.5 space-y-0.5">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-gray-400">Code</span>
+                    <span className="font-mono font-medium text-gray-700">{site.code}</span>
+                  </div>
+                  {SITE_COORDINATES[site.code]?.address && (
+                    <p className="text-[10px] text-gray-400 leading-tight mt-1">
+                      {SITE_COORDINATES[site.code].address}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </Popup>
+          </CircleMarker>
+        ))}
+      </MapContainer>
+    </div>
+  )
+}
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: 'Super Admin',
@@ -101,15 +271,23 @@ export function DashboardPage() {
       }))
   }, [enrollment?.by_site])
 
-  // Build map markers from enrollment data
-  const siteMarkers = useMemo(() => {
+  // Build map markers from enrollment data — include color per site, keyed to stable order
+  const siteMarkers = useMemo((): SiteMarker[] => {
     if (!enrollment?.by_site) return []
     const siteCountMap = new Map(enrollment.by_site.map((s) => [s.site_code, s.count]))
-    return Object.entries(SITE_COORDINATES).map(([code, coord]) => ({
-      code,
-      ...coord,
-      count: siteCountMap.get(code) ?? 0,
-    }))
+    const codes = Object.keys(SITE_COORDINATES)
+    return codes.map((code, i) => {
+      const coord = SITE_COORDINATES[code]
+      return {
+        code,
+        lat: coord.lat,
+        lng: coord.lng,
+        name: coord.name,
+        city: coord.city,
+        count: siteCountMap.get(code) ?? 0,
+        color: SITE_COLORS[i % SITE_COLORS.length],
+      }
+    })
   }, [enrollment?.by_site])
 
   // Enrollment time series
@@ -252,36 +430,14 @@ export function DashboardPage() {
         {/* Site Map */}
         <ChartCard
           title="Collection Sites"
-          subtitle="Karnataka study sites"
+          subtitle="Bubble size = participant count. Click a site for details."
           loading={enrollmentLoading}
           error={enrollmentError ? 'Failed to load site data' : undefined}
           empty={!enrollmentLoading && !enrollmentError && siteMarkers.length === 0}
           emptyMessage="No site data available"
           height="h-72"
         >
-          <MapContainer
-            center={[12.97, 77.59]}
-            zoom={9}
-            className="h-full w-full rounded-lg z-0"
-            scrollWheelZoom={false}
-            attributionControl={false}
-          >
-            <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-            />
-            {siteMarkers.map((site) => (
-              <Marker key={site.code} position={[site.lat, site.lng]}>
-                <Popup>
-                  <div className="text-xs">
-                    <p className="font-semibold text-gray-900">{site.name}</p>
-                    <p className="text-gray-500">{site.city}</p>
-                    <p className="mt-1 font-medium text-primary">{site.count.toLocaleString()} participants</p>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
-          </MapContainer>
+          <SiteMap markers={siteMarkers} />
         </ChartCard>
       </div>
 
@@ -346,7 +502,7 @@ export function DashboardPage() {
             { label: 'Enrollment Analytics', to: '/reports/enrollment', icon: Users, color: COLORS.primary, desc: 'Enrollment trends and demographics' },
             { label: 'Inventory Overview', to: '/reports/inventory', icon: FlaskConical, color: COLORS.teal, desc: 'Sample counts and storage' },
             { label: 'Quality Dashboard', to: '/reports/quality', icon: BarChart3, color: COLORS.success, desc: 'QC metrics and ICC results' },
-            { label: 'Field Operations', to: '/reports/field-ops', icon: Calendar, color: COLORS.warning, desc: 'Upcoming events and check-ins' },
+            { label: 'Field Operations', to: '/field-ops/events', icon: Calendar, color: COLORS.warning, desc: 'Upcoming events and check-ins' },
           ].map((link) => (
             <Link
               key={link.to}

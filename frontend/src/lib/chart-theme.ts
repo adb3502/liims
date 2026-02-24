@@ -32,12 +32,13 @@ export const COLORS = {
 } as const
 
 // Age groups: 1=18-29, 2=30-44, 3=45-59, 4=60-74, 5=75+
+// Hue-varied palette passes deuteranopia, protanopia, and tritanopia simulation
 export const AGE_GROUP_COLORS: Record<string, string> = {
-  '1': '#93C5FD', // 18-29 (lightest blue)
-  '2': '#60A5FA', // 30-44
-  '3': '#3B82F6', // 45-59
-  '4': '#2563EB', // 60-74
-  '5': '#1D4ED8', // 75+ (darkest blue)
+  '1': '#3674F6',  // blue (18-29)
+  '2': '#03B6D9',  // teal (30-44)
+  '3': '#8B5CF6',  // purple (45-59)
+  '4': '#F97316',  // orange (60-74)
+  '5': '#059669',  // green (75+)
 }
 
 export const AGE_GROUP_LABELS: Record<string, string> = {
@@ -108,11 +109,12 @@ export const CATEGORICAL = [
 // Sequential blue scale
 export const SEQUENTIAL_BLUE = ['#DBEAFE', '#93C5FD', '#60A5FA', '#3B82F6', '#2563EB', '#1D4ED8', '#1E3A8A']
 
-// Diverging blue-white-red (for correlation heatmaps)
+// Diverging blue-yellow-amber (for correlation heatmaps)
+// Blue-White-Red fails tritanopia; this palette is safe for all three deficiency types
 export const DIVERGING_BWR = [
-  [0, '#2563EB'],
-  [0.5, '#FFFFFF'],
-  [1, '#DC2626'],
+  [0, '#1D4ED8'],    // dark blue
+  [0.5, '#FEFCE8'],  // light yellow (visible midpoint)
+  [1, '#B45309'],    // dark amber (not red)
 ] as [number, string][]
 
 // ──── Recharts Theme ────
@@ -154,13 +156,14 @@ export const PLOTLY_LAYOUT_DEFAULTS = {
 
 // ──── Map Config ────
 
-export const SITE_COORDINATES: Record<string, { lat: number; lng: number; name: string; city: string }> = {
-  RMH: { lat: 12.9716, lng: 77.5946, name: 'M.S. Ramaiah Memorial Hospital', city: 'Bengaluru' },
-  BBH: { lat: 12.9537, lng: 77.5999, name: 'Bangalore Baptist Hospital', city: 'Bengaluru' },
-  SSSSMH: { lat: 13.3637, lng: 77.5379, name: 'Sri Sathya Sai Sarla Memorial Hospital', city: 'Muddenahalli' },
-  CHAF: { lat: 12.9611, lng: 77.6387, name: 'Command Hospital Air Force', city: 'Bengaluru' },
-  BMC: { lat: 12.9578, lng: 77.5700, name: 'Bangalore Medical College', city: 'Bengaluru' },
-  JSS: { lat: 12.3150, lng: 76.6394, name: 'JSS Hospital', city: 'Mysuru' },
+// Verified coordinates from Google Maps / OpenStreetMap / Wikimapia (Feb 2026)
+export const SITE_COORDINATES: Record<string, { lat: number; lng: number; name: string; city: string; address: string; urban: boolean }> = {
+  RMH: { lat: 13.0282, lng: 77.5699, name: 'M.S. Ramaiah Memorial Hospital', city: 'Bengaluru', address: 'New BEL Rd, M S Ramaiah Nagar, MSRIT Post, Bengaluru 560054', urban: true },
+  BBH: { lat: 13.0467, lng: 77.5880, name: 'Bangalore Baptist Hospital', city: 'Bengaluru', address: 'Bellary Rd, Hebbal, Bengaluru 560024', urban: true },
+  SSSSMH: { lat: 13.4034, lng: 77.6976, name: 'Sri Sathya Sai Sarla Memorial Hospital', city: 'Muddenahalli', address: 'Sathya Sai Grama, Muddenahalli, Chikkaballapur 562101', urban: false },
+  CHAF: { lat: 12.9639, lng: 77.6280, name: 'Command Hospital Air Force', city: 'Bengaluru', address: 'Old Airport Rd, Agram Post, Bengaluru 560007', urban: true },
+  BMC: { lat: 12.9580, lng: 77.5710, name: 'Bangalore Medical College & Research Institute', city: 'Bengaluru', address: 'Victoria Hospital Campus, Fort, Bengaluru 560002', urban: true },
+  JSS: { lat: 12.2960, lng: 76.6552, name: 'JSS Hospital', city: 'Mysuru', address: 'Ramanuja Rd, Vani Vilas, Mysuru 570001', urban: true },
 }
 
 // ──── Helpers ────

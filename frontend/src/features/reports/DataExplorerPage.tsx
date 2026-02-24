@@ -71,7 +71,7 @@ const SITE_OPTIONS = [
 const TABS = ['Distribution', 'Correlation', 'Clinical Overview'] as const
 type Tab = (typeof TABS)[number]
 
-const CHART_TYPES = ['box', 'histogram'] as const
+const CHART_TYPES = ['box', 'violin', 'histogram'] as const
 type ChartType = (typeof CHART_TYPES)[number]
 
 const GROUP_BY_OPTIONS = [
@@ -80,6 +80,15 @@ const GROUP_BY_OPTIONS = [
   { value: 'site', label: 'Site' },
 ] as const
 type GroupBy = 'age_group' | 'sex' | 'site'
+
+const COLOR_BY_OPTIONS = [
+  { value: 'age_group', label: 'Age Group' },
+  { value: 'sex', label: 'Sex' },
+  { value: 'site', label: 'Site' },
+  // HbA1c-derived: UI only for now; backend support pending
+  { value: 'hba1c_status', label: 'HbA1c Status' },
+] as const
+type ColorBy = 'age_group' | 'sex' | 'site' | 'hba1c_status'
 
 const METHODS = [
   { value: 'spearman', label: 'Spearman' },
@@ -256,10 +265,25 @@ function getGroupColors(groupBy: GroupBy, groups: string[]): string[] {
   return groups.map((_, i) => SITE_COLORS[i % SITE_COLORS.length])
 }
 
+function getGroupColor(groupBy: GroupBy, groupKey: string, index: number): string {
+  if (groupBy === 'age_group') return AGE_GROUP_COLORS[groupKey] || COLORS.primary
+  if (groupBy === 'sex') return groupKey === 'A' || groupKey === 'Male' ? SEX_COLORS.Male : SEX_COLORS.Female
+  return SITE_COLORS[index % SITE_COLORS.length]
+}
+
 function getGroupLabel(groupBy: GroupBy, groupKey: string): string {
   if (groupBy === 'age_group') return AGE_GROUP_LABELS[groupKey] || groupKey
   if (groupBy === 'sex') return groupKey === 'A' ? 'Male' : groupKey === 'B' ? 'Female' : groupKey
   return groupKey
+}
+
+function getColorByColor(colorBy: ColorBy, groupBy: GroupBy, groupKey: string, index: number): string {
+  // When colorBy matches groupBy, derive color from the group key
+  if (colorBy === groupBy) return getGroupColor(groupBy, groupKey, index)
+  // HbA1c status coloring: backend pending, fall back to index-based
+  if (colorBy === 'hba1c_status') return SITE_COLORS[index % SITE_COLORS.length]
+  // Cross-dimension coloring: use index-based as fallback
+  return SITE_COLORS[index % SITE_COLORS.length]
 }
 
 function DistributionTab({
@@ -272,10 +296,21 @@ function DistributionTab({
   const [parameter, setParameter] = useState('')
   const [chartType, setChartType] = useState<ChartType>('box')
   const [groupBy, setGroupBy] = useState<GroupBy>('age_group')
+  const [colorBy, setColorBy] = useState<ColorBy>('age_group')
+  const [showPoints, setShowPoints] = useState(false)
+
+  // Keep colorBy in sync with groupBy default when groupBy changes
+  const handleGroupByChange = useCallback((val: GroupBy) => {
+    setGroupBy(val)
+    setColorBy(val)
+  }, [])
+
+  // For violin/box we always fetch with chartType='box' to get raw values
+  const fetchType = chartType === 'histogram' ? 'histogram' : 'box'
 
   const { data, isLoading, isError } = useDataExplorerDistribution(
     parameter,
-    chartType,
+    fetchType,
     groupBy,
     filters,
     !!parameter,
@@ -288,31 +323,51 @@ function DistributionTab({
 
   const plotData = useMemo(() => {
     if (!data) return []
-    const colors = getGroupColors(groupBy, data.groups.map((g) => g.group))
 
     if (chartType === 'box') {
-      return data.groups.map((g, i) => ({
-        type: 'box' as const,
-        name: getGroupLabel(groupBy, g.group),
-        q1: [g.q1],
-        median: [g.median],
-        q3: [g.q3],
-        lowerfence: [g.min],
-        upperfence: [g.max],
-        mean: [g.mean],
-        boxmean: 'sd' as const,
-        marker: { color: colors[i] },
-        line: { color: colors[i] },
-        fillcolor: `${colors[i]}33`,
-        hovertemplate:
-          `<b>${getGroupLabel(groupBy, g.group)}</b><br>` +
-          `Median: %{median:.2f}<br>` +
-          `Q1-Q3: ${g.q1.toFixed(2)}-${g.q3.toFixed(2)}<br>` +
-          `Mean: ${g.mean.toFixed(2)} +/- ${g.sd.toFixed(2)}<br>` +
-          `N: ${g.n}<extra></extra>`,
-      }))
+      return data.groups.map((g, i) => {
+        const color = getColorByColor(colorBy, groupBy, g.group, i)
+        return {
+          type: 'box' as const,
+          name: getGroupLabel(groupBy, g.group),
+          y: g.values ?? [],
+          boxpoints: 'outliers' as const,
+          jitter: 0.3,
+          marker: { color },
+          line: { color },
+          fillcolor: `${color}33`,
+          hovertemplate:
+            `<b>${getGroupLabel(groupBy, g.group)}</b><br>` +
+            `Median: %{median:.2f}<br>` +
+            `Q1-Q3: ${g.q1.toFixed(2)}-${g.q3.toFixed(2)}<br>` +
+            `Mean: ${g.mean.toFixed(2)} +/- ${g.sd.toFixed(2)}<br>` +
+            `N: ${g.n}<extra></extra>`,
+        }
+      })
     }
 
+    if (chartType === 'violin') {
+      return data.groups.map((g, i) => {
+        const color = getColorByColor(colorBy, groupBy, g.group, i)
+        return {
+          type: 'violin' as const,
+          name: getGroupLabel(groupBy, g.group),
+          y: g.values ?? [],
+          box: { visible: true },
+          meanline: { visible: true },
+          points: showPoints ? ('all' as const) : (false as const),
+          marker: { color, size: 3, opacity: 0.5 },
+          line: { color },
+          fillcolor: `${color}33`,
+          hovertemplate:
+            `<b>${getGroupLabel(groupBy, g.group)}</b><br>` +
+            `N: ${g.n}<extra></extra>`,
+        }
+      })
+    }
+
+    // histogram
+    const colors = getGroupColors(groupBy, data.groups.map((g) => g.group))
     return data.groups.map((g, i) => ({
       type: 'histogram' as const,
       name: getGroupLabel(groupBy, g.group),
@@ -321,19 +376,41 @@ function DistributionTab({
       marker: { color: colors[i] },
       hovertemplate: `<b>${getGroupLabel(groupBy, g.group)}</b><br>Count: %{y}<extra></extra>`,
     }))
-  }, [data, chartType, groupBy])
+  }, [data, chartType, groupBy, colorBy, showPoints])
+
+  // N annotations for box/violin — shown below each trace
+  const annotations = useMemo(() => {
+    if (!data || chartType === 'histogram') return []
+    return data.groups.map((g, i) => ({
+      x: i,
+      y: -0.08,
+      xref: 'x' as const,
+      yref: 'paper' as const,
+      text: `n=${g.n.toLocaleString()}`,
+      showarrow: false,
+      font: { size: 9, color: '#94A3B8' },
+      xanchor: 'center' as const,
+    }))
+  }, [data, chartType])
 
   const statsRows = useMemo(() => {
     if (!data) return []
-    return data.groups.map((g) => ({
-      group: getGroupLabel(groupBy, g.group),
-      n: g.n,
-      mean: g.mean,
-      median: g.median,
-      sd: g.sd,
-      q1: g.q1,
-      q3: g.q3,
-    }))
+    return data.groups.map((g) => {
+      const ciMargin = g.n > 0 ? 1.96 * (g.sd / Math.sqrt(g.n)) : 0
+      return {
+        group: getGroupLabel(groupBy, g.group),
+        n: g.n,
+        mean: g.mean,
+        median: g.median,
+        sd: g.sd,
+        q1: g.q1,
+        q3: g.q3,
+        min: g.min,
+        max: g.max,
+        ciLow: g.mean - ciMargin,
+        ciHigh: g.mean + ciMargin,
+      }
+    })
   }, [data, groupBy])
 
   return (
@@ -351,9 +428,11 @@ function DistributionTab({
           {CHART_TYPES.map((t) => (
             <button
               key={t}
+              id={`chart-type-${t}`}
               onClick={() => setChartType(t)}
+              aria-pressed={chartType === t}
               className={cn(
-                'flex-1 rounded-md px-3 py-1.5 text-xs font-medium capitalize transition-all',
+                'flex-1 rounded-md px-2 py-1.5 text-xs font-medium capitalize transition-all',
                 chartType === t
                   ? 'bg-white text-primary shadow-sm border border-gray-200'
                   : 'text-gray-500 hover:text-gray-700',
@@ -368,7 +447,8 @@ function DistributionTab({
           {GROUP_BY_OPTIONS.map((opt) => (
             <button
               key={opt.value}
-              onClick={() => setGroupBy(opt.value)}
+              onClick={() => handleGroupByChange(opt.value)}
+              aria-pressed={groupBy === opt.value}
               className={cn(
                 'flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-all',
                 groupBy === opt.value
@@ -381,6 +461,40 @@ function DistributionTab({
           ))}
         </div>
       </div>
+
+      {/* Color-by selector */}
+      <div className="flex items-center gap-2">
+        <label className="text-xs text-gray-500 flex-shrink-0" htmlFor="color-by-select">
+          Color by:
+        </label>
+        <select
+          id="color-by-select"
+          value={colorBy}
+          onChange={(e) => setColorBy(e.target.value as ColorBy)}
+          className="rounded-lg border border-gray-200 bg-white py-1 pl-2 pr-7 text-xs text-gray-700 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
+          aria-label="Color traces by dimension"
+        >
+          {COLOR_BY_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+              {opt.value === 'hba1c_status' ? ' (pending backend)' : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Show Points toggle — only for box and violin */}
+      {(chartType === 'box' || chartType === 'violin') && (
+        <label className="inline-flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={showPoints}
+            onChange={(e) => setShowPoints(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-gray-300 accent-primary"
+          />
+          Show individual data points
+        </label>
+      )}
 
       {/* Chart */}
       <ChartCard
@@ -404,15 +518,18 @@ function DistributionTab({
           data={plotData}
           layout={{
             ...PLOTLY_LAYOUT_DEFAULTS,
+            boxmode: chartType !== 'histogram' ? ('group' as const) : undefined,
+            violinmode: chartType === 'violin' ? ('group' as const) : undefined,
             barmode: chartType === 'histogram' ? ('overlay' as const) : undefined,
             yaxis: {
               ...PLOTLY_LAYOUT_DEFAULTS.yaxis,
-              title: chartType === 'box'
+              title: chartType !== 'histogram'
                 ? { text: selectedMeta?.unit ?? '', font: { size: 11 } }
                 : { text: 'Count', font: { size: 11 } },
             },
-            legend: { orientation: 'h' as const, y: -0.15, x: 0.5, xanchor: 'center' as const },
-            margin: { l: 60, r: 20, t: 20, b: 80 },
+            legend: { orientation: 'h' as const, y: -0.2, x: 0.5, xanchor: 'center' as const },
+            margin: { l: 60, r: 20, t: 20, b: 90 },
+            annotations,
           }}
           config={{ displayModeBar: false, responsive: true }}
           style={{ width: '100%', height: '100%' }}
@@ -438,8 +555,11 @@ function DistributionTab({
                   <th className="px-4 py-2 text-right font-semibold text-gray-600">Mean</th>
                   <th className="px-4 py-2 text-right font-semibold text-gray-600">Median</th>
                   <th className="px-4 py-2 text-right font-semibold text-gray-600">SD</th>
+                  <th className="px-4 py-2 text-right font-semibold text-gray-600">Min</th>
+                  <th className="px-4 py-2 text-right font-semibold text-gray-600">Max</th>
                   <th className="px-4 py-2 text-right font-semibold text-gray-600">Q1</th>
                   <th className="px-4 py-2 text-right font-semibold text-gray-600">Q3</th>
+                  <th className="px-4 py-2 text-right font-semibold text-gray-600">95% CI</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -449,14 +569,22 @@ function DistributionTab({
                     <td className="px-4 py-2 text-right tabular-nums text-gray-600">{row.n.toLocaleString()}</td>
                     <td className="px-4 py-2 text-right tabular-nums text-gray-600">{row.mean.toFixed(2)}</td>
                     <td className="px-4 py-2 text-right tabular-nums text-gray-600">{row.median.toFixed(2)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-gray-600">+/-{row.sd.toFixed(2)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-gray-600">{row.sd.toFixed(2)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-gray-600">{row.min.toFixed(2)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-gray-600">{row.max.toFixed(2)}</td>
                     <td className="px-4 py-2 text-right tabular-nums text-gray-600">{row.q1.toFixed(2)}</td>
                     <td className="px-4 py-2 text-right tabular-nums text-gray-600">{row.q3.toFixed(2)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-gray-600">
+                      [{row.ciLow.toFixed(2)}, {row.ciHigh.toFixed(2)}]
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <p className="px-4 py-2 text-[10px] text-gray-400 border-t border-gray-100">
+            SD = sample standard deviation. CI = 95% confidence interval for the mean.
+          </p>
         </div>
       )}
     </div>
@@ -490,7 +618,16 @@ function CorrelationTab({
 
   const heatmapData = useMemo(() => {
     if (!data) return []
+    // Use NaN for non-significant cells to render them as gray (hoverongaps handles display)
+    // We keep the full z for hover but use opacity overlay via a second trace
     const z = data.matrix.map((row) => row.map((cell) => cell.r))
+    // Mask non-significant cells with a light gray overlay value
+    const zSignificant = data.matrix.map((row) =>
+      row.map((cell) => (cell.p_value > 0.05 ? null : cell.r))
+    )
+    const zNonSig = data.matrix.map((row) =>
+      row.map((cell) => (cell.p_value > 0.05 ? 0 : null))
+    )
     const text = data.matrix.map((row) =>
       row.map(
         (cell) =>
@@ -498,9 +635,23 @@ function CorrelationTab({
       ),
     )
     return [
+      // Non-significant cells: light gray
       {
         type: 'heatmap' as const,
-        z,
+        z: zNonSig,
+        x: data.labels,
+        y: data.labels,
+        colorscale: [[0, '#E5E7EB'], [1, '#E5E7EB']] as [number, string][],
+        zmin: -0.5,
+        zmax: 0.5,
+        showscale: false,
+        hoverongaps: false,
+        hoverinfo: 'skip' as const,
+      },
+      // Significant cells: full color
+      {
+        type: 'heatmap' as const,
+        z: zSignificant,
         x: data.labels,
         y: data.labels,
         text,
@@ -515,6 +666,29 @@ function CorrelationTab({
           thickness: 12,
           len: 0.8,
         },
+      },
+      // Non-significant cells text overlay (show r value dimmed)
+      {
+        type: 'heatmap' as const,
+        z: data.matrix.map((row) => row.map((cell) => (cell.p_value > 0.05 ? cell.r : null))),
+        x: data.labels,
+        y: data.labels,
+        text: data.matrix.map((row) =>
+          row.map((cell) =>
+            cell.p_value > 0.05
+              ? `r=${cell.r.toFixed(2)}\np=${cell.p_value < 0.001 ? '<0.001' : cell.p_value.toFixed(3)}\nn=${cell.n}`
+              : '',
+          ),
+        ),
+        texttemplate: '%{text}',
+        colorscale: [[0, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,0)']] as [number, string][],
+        zmin: -1,
+        zmax: 1,
+        showscale: false,
+        hoverongaps: false,
+        hovertemplate: '<b>%{x}</b> vs <b>%{y}</b><br>%{text} (p>0.05, ns)<extra></extra>',
+        // Text in gray to indicate non-significance
+        textfont: { color: '#9CA3AF' },
       },
     ]
   }, [data])
@@ -634,6 +808,14 @@ function CorrelationTab({
         />
       </ChartCard>
 
+      {/* Heatmap scientific disclaimer */}
+      {data && (
+        <p className="text-[10px] text-gray-400 px-1">
+          Note: p-values are approximate and not corrected for multiple comparisons. Significant correlations should be confirmed with formal analysis.
+          Gray cells indicate p &gt; 0.05 (not significant at alpha = 0.05).
+        </p>
+      )}
+
       {/* Accessible pair table */}
       {correlationRows.length > 0 && (
         <div className="rounded-xl border border-gray-100 bg-white overflow-hidden">
@@ -673,7 +855,9 @@ function CorrelationTab({
                       </td>
                       <td className={cn('px-4 py-2 text-right tabular-nums', sig)}>
                         {row.p < 0.001 ? '<0.001' : row.p.toFixed(3)}
-                        {row.p < 0.05 && <span className="ml-1 text-emerald-500">*</span>}
+                        {row.p < 0.05 && (
+                          <span className="ml-1 text-emerald-500" aria-label="statistically significant (p < 0.05)">*</span>
+                        )}
                       </td>
                       <td className="px-4 py-2 text-right tabular-nums text-gray-600">{row.n.toLocaleString()}</td>
                     </tr>
@@ -883,25 +1067,30 @@ export function DataExplorerPage() {
         <div className="flex-1 min-w-0">
           {/* Tab bar */}
           <div className="mb-5 flex rounded-xl border border-gray-200 bg-gray-50 p-1 gap-1" role="tablist">
-            {TABS.map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                role="tab"
-                aria-selected={activeTab === tab}
-                className={cn(
-                  'flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-all',
-                  activeTab === tab
-                    ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
-                    : 'text-gray-500 hover:text-gray-700',
-                )}
-              >
-                {tab === 'Distribution' && <BarChart3 className="inline-block h-3.5 w-3.5 mr-1.5 opacity-70" />}
-                {tab === 'Correlation' && <Activity className="inline-block h-3.5 w-3.5 mr-1.5 opacity-70" />}
-                {tab === 'Clinical Overview' && <Heart className="inline-block h-3.5 w-3.5 mr-1.5 opacity-70" />}
-                {tab}
-              </button>
-            ))}
+            {TABS.map((tab) => {
+              const tabId = `tab-${tab.toLowerCase().replace(/\s+/g, '-')}`
+              return (
+                <button
+                  key={tab}
+                  id={tabId}
+                  onClick={() => setActiveTab(tab)}
+                  role="tab"
+                  aria-selected={activeTab === tab}
+                  aria-controls={`tabpanel-${tab.toLowerCase().replace(/\s+/g, '-')}`}
+                  className={cn(
+                    'flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-all',
+                    activeTab === tab
+                      ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
+                      : 'text-gray-500 hover:text-gray-700',
+                  )}
+                >
+                  {tab === 'Distribution' && <BarChart3 className="inline-block h-3.5 w-3.5 mr-1.5 opacity-70" />}
+                  {tab === 'Correlation' && <Activity className="inline-block h-3.5 w-3.5 mr-1.5 opacity-70" />}
+                  {tab === 'Clinical Overview' && <Heart className="inline-block h-3.5 w-3.5 mr-1.5 opacity-70" />}
+                  {tab}
+                </button>
+              )
+            })}
           </div>
 
           {/* Tab content */}
@@ -913,7 +1102,11 @@ export function DataExplorerPage() {
               </div>
             </div>
           ) : (
-            <div role="tabpanel">
+            <div
+              role="tabpanel"
+              id={`tabpanel-${activeTab.toLowerCase().replace(/\s+/g, '-')}`}
+              aria-labelledby={`tab-${activeTab.toLowerCase().replace(/\s+/g, '-')}`}
+            >
               {activeTab === 'Distribution' && (
                 <DistributionTab parameters={parameters ?? []} filters={filters} />
               )}
@@ -928,7 +1121,11 @@ export function DataExplorerPage() {
 
           {/* Mobile filter disclosure */}
           <details className="lg:hidden mt-6 rounded-xl border border-gray-200">
-            <summary className="px-4 py-3 text-sm font-medium text-gray-700 cursor-pointer list-none flex items-center justify-between">
+            <summary
+              className="px-4 py-3 text-sm font-medium text-gray-700 cursor-pointer list-none flex items-center justify-between"
+              role="group"
+              aria-expanded={undefined}
+            >
               <span>Cohort Filters {activeFilterCount > 0 && `(${activeFilterCount} active)`}</span>
               <ChevronDown className="h-4 w-4 text-gray-400" />
             </summary>

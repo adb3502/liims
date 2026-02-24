@@ -30,7 +30,7 @@
 - Forms: react-hook-form + zod schema validation
 - Styling: Tailwind utility classes, `cn()` for conditional classes
 - Colors: `--color-primary`, `--color-success`, `--color-warning`, `--color-danger`
-- Font: Inter (sans), monospace for sample codes/IDs
+- Font: Red Hat Display (sans), monospace for sample codes/IDs
 
 ## Running
 
