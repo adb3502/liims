@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useDashboardEnrollment } from '@/api/dashboard'
+import { useDashboardEnrollment, useDashboardEnrollmentMatrix } from '@/api/dashboard'
 import type { DemographicStats } from '@/api/dashboard'
 import { PageHeader } from '@/components/ui/page-header'
 import { StatCard, StatCardSkeleton } from '@/components/ui/stat-card'
@@ -437,6 +437,193 @@ function GenderDonut({ data }: { data: Array<{ sex: string; count: number }> }) 
   )
 }
 
+// ──── Enrollment Matrix Table ────
+
+function EnrollmentMatrixTable() {
+  const { data, isLoading, isError } = useDashboardEnrollmentMatrix()
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border border-gray-100 bg-white overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100">
+          <div className="h-4 w-40 skeleton rounded" />
+          <div className="h-3 w-56 skeleton rounded mt-1.5" />
+        </div>
+        <div className="p-4 space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-8 skeleton rounded" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="rounded-xl border border-red-100 bg-red-50 p-6 text-center">
+        <p className="text-sm text-red-600">Failed to load enrollment matrix data.</p>
+      </div>
+    )
+  }
+
+  if (!data || data.sites.length === 0) {
+    return (
+      <div className="rounded-xl border border-gray-100 bg-white p-8 text-center">
+        <Users className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+        <p className="text-sm text-gray-500">No enrollment matrix data available</p>
+      </div>
+    )
+  }
+
+  const { sites, group_codes, matrix, totals } = data
+  const grand = totals.grand
+  const grandPct = grand.target > 0 ? Math.min((grand.count / grand.target) * 100, 100) : 0
+
+  return (
+    <div className="rounded-xl border border-gray-100 bg-white overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100">
+        <h3 className="text-sm font-semibold text-gray-800">Enrollment Matrix</h3>
+        <p className="text-xs text-gray-400 mt-0.5">
+          Count / target per site and participant group. Progress bars show completion rate.
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table
+          className="w-full text-xs"
+          aria-label="Enrollment matrix showing participant counts by site and group code"
+        >
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-2.5 text-left font-semibold text-gray-600 whitespace-nowrap">
+                Site
+              </th>
+              {group_codes.map((gc) => (
+                <th key={gc} className="px-3 py-2.5 text-center font-semibold text-gray-600 whitespace-nowrap">
+                  {gc}
+                </th>
+              ))}
+              <th className="px-4 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">
+                Site Total
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {sites.map((site) => {
+              const siteTotal = totals.by_site[site]
+              const sitePct = siteTotal && siteTotal.target > 0
+                ? Math.min((siteTotal.count / siteTotal.target) * 100, 100)
+                : 0
+              return (
+                <tr key={site} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-2 font-semibold text-gray-800 whitespace-nowrap">
+                    {site}
+                  </td>
+                  {group_codes.map((gc) => {
+                    const cell = matrix[site]?.[gc]
+                    const count = cell?.count ?? 0
+                    const target = cell?.target ?? 0
+                    const pct = target > 0 ? Math.min((count / target) * 100, 100) : 0
+                    const barColor = pct >= 100
+                      ? COLORS.success
+                      : pct >= 75
+                        ? COLORS.primary
+                        : pct >= 40
+                          ? COLORS.teal
+                          : COLORS.gray400
+                    return (
+                      <td key={gc} className="px-3 py-2 text-center">
+                        <span className="tabular-nums text-gray-700">
+                          {count > 0 ? count : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                          {target > 0 && (
+                            <span className="text-gray-400">/{target}</span>
+                          )}
+                        </span>
+                        {target > 0 && (
+                          <div className="mt-1 h-1 w-full rounded-full bg-gray-100 overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-700 ease-out"
+                              style={{ width: `${pct}%`, backgroundColor: barColor }}
+                              aria-label={`${pct.toFixed(0)}% complete`}
+                            />
+                          </div>
+                        )}
+                      </td>
+                    )
+                  })}
+                  <td className="px-4 py-2 text-right">
+                    <span className="tabular-nums font-semibold text-gray-800">
+                      {siteTotal?.count?.toLocaleString() ?? '—'}
+                    </span>
+                    {siteTotal?.target != null && siteTotal.target > 0 && (
+                      <>
+                        <span className="text-gray-400">/{siteTotal.target.toLocaleString()}</span>
+                        <div className="mt-1 h-1 w-full rounded-full bg-gray-100 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-700 ease-out"
+                            style={{
+                              width: `${sitePct}%`,
+                              backgroundColor: sitePct >= 100 ? COLORS.success : COLORS.primary,
+                            }}
+                            aria-label={`${sitePct.toFixed(0)}% of site target`}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot className="bg-gray-50 border-t border-gray-200">
+            <tr>
+              <td className="px-4 py-2.5 font-bold text-gray-700">Group Total</td>
+              {group_codes.map((gc) => {
+                const groupTotal = totals.by_group[gc]
+                return (
+                  <td key={gc} className="px-3 py-2.5 text-center">
+                    <span className="tabular-nums font-semibold text-gray-700">
+                      {groupTotal?.count?.toLocaleString() ?? '—'}
+                    </span>
+                    {groupTotal?.target != null && groupTotal.target > 0 && (
+                      <span className="text-gray-400">/{groupTotal.target.toLocaleString()}</span>
+                    )}
+                  </td>
+                )
+              })}
+              <td className="px-4 py-2.5 text-right">
+                <span className="tabular-nums font-bold text-gray-800">
+                  {grand.count.toLocaleString()}
+                </span>
+                {grand.target > 0 && (
+                  <>
+                    <span className="text-gray-400">/{grand.target.toLocaleString()}</span>
+                    <div className="mt-1 h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-700 ease-out"
+                        style={{
+                          width: `${grandPct}%`,
+                          backgroundColor: grandPct >= 100 ? COLORS.success : COLORS.primary,
+                        }}
+                        aria-label={`Overall ${grandPct.toFixed(0)}% of study target`}
+                      />
+                    </div>
+                  </>
+                )}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="px-4 py-2 text-[10px] text-gray-400 border-t border-gray-100">
+        Group codes: first digit = age group (1=18-29, 2=30-44, 3=45-59, 4=60-74, 5=75+), letter = sex (A=male, B=female).
+        Progress bar color: green = 100%, blue = 75%+, teal = 40%+, gray = &lt;40%.
+      </p>
+    </div>
+  )
+}
+
 // ──── Main Page ────
 
 export function EnrollmentDashboardPage() {
@@ -585,6 +772,9 @@ export function EnrollmentDashboardPage() {
           <ChartCard title="Sex Distribution" empty emptyMessage="No data" height="h-72">{null}</ChartCard>
         )}
       </div>
+
+      {/* Row 3: Enrollment Matrix */}
+      <EnrollmentMatrixTable />
     </div>
   )
 }

@@ -618,10 +618,8 @@ function CorrelationTab({
 
   const heatmapData = useMemo(() => {
     if (!data) return []
-    // Use NaN for non-significant cells to render them as gray (hoverongaps handles display)
-    // We keep the full z for hover but use opacity overlay via a second trace
-    const z = data.matrix.map((row) => row.map((cell) => cell.r))
-    // Mask non-significant cells with a light gray overlay value
+    // p_value is BH-adjusted when backend returns adjusted_p_values (preferred in hook)
+    const pLabel = data.multiple_comparison_note ? 'p_adj' : 'p'
     const zSignificant = data.matrix.map((row) =>
       row.map((cell) => (cell.p_value > 0.05 ? null : cell.r))
     )
@@ -631,7 +629,7 @@ function CorrelationTab({
     const text = data.matrix.map((row) =>
       row.map(
         (cell) =>
-          `r=${cell.r.toFixed(2)}\np=${cell.p_value < 0.001 ? '<0.001' : cell.p_value.toFixed(3)}\nn=${cell.n}`,
+          `r=${cell.r.toFixed(2)}\n${pLabel}=${cell.p_value < 0.001 ? '<0.001' : cell.p_value.toFixed(3)}\nn=${cell.n}`,
       ),
     )
     return [
@@ -676,7 +674,7 @@ function CorrelationTab({
         text: data.matrix.map((row) =>
           row.map((cell) =>
             cell.p_value > 0.05
-              ? `r=${cell.r.toFixed(2)}\np=${cell.p_value < 0.001 ? '<0.001' : cell.p_value.toFixed(3)}\nn=${cell.n}`
+              ? `r=${cell.r.toFixed(2)}\n${pLabel}=${cell.p_value < 0.001 ? '<0.001' : cell.p_value.toFixed(3)}\nn=${cell.n}`
               : '',
           ),
         ),
@@ -686,8 +684,7 @@ function CorrelationTab({
         zmax: 1,
         showscale: false,
         hoverongaps: false,
-        hovertemplate: '<b>%{x}</b> vs <b>%{y}</b><br>%{text} (p>0.05, ns)<extra></extra>',
-        // Text in gray to indicate non-significance
+        hovertemplate: `<b>%{x}</b> vs <b>%{y}</b><br>%{text} (${pLabel}>0.05, ns)<extra></extra>`,
         textfont: { color: '#9CA3AF' },
       },
     ]
@@ -811,8 +808,10 @@ function CorrelationTab({
       {/* Heatmap scientific disclaimer */}
       {data && (
         <p className="text-[10px] text-gray-400 px-1">
-          Note: p-values are approximate and not corrected for multiple comparisons. Significant correlations should be confirmed with formal analysis.
-          Gray cells indicate p &gt; 0.05 (not significant at alpha = 0.05).
+          {data.multiple_comparison_note
+            ? `Note: ${data.multiple_comparison_note} Significant correlations should be confirmed with formal analysis.`
+            : 'Note: p-values are approximate and not corrected for multiple comparisons. Significant correlations should be confirmed with formal analysis.'}
+          {' '}Gray cells indicate p &gt; 0.05 (not significant at alpha = 0.05).
         </p>
       )}
 
@@ -832,7 +831,9 @@ function CorrelationTab({
                   <th className="px-4 py-2 text-left font-semibold text-gray-600">Parameter X</th>
                   <th className="px-4 py-2 text-left font-semibold text-gray-600">Parameter Y</th>
                   <th className="px-4 py-2 text-right font-semibold text-gray-600">r</th>
-                  <th className="px-4 py-2 text-right font-semibold text-gray-600">p-value</th>
+                  <th className="px-4 py-2 text-right font-semibold text-gray-600">
+                    {data?.multiple_comparison_note ? 'p-value (adj)' : 'p-value'}
+                  </th>
                   <th className="px-4 py-2 text-right font-semibold text-gray-600">N</th>
                 </tr>
               </thead>

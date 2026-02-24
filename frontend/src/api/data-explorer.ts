@@ -64,6 +64,8 @@ export interface CorrelationResponse {
   labels: string[]
   matrix: CorrelationCell[][]
   n_participants: number
+  // Present when backend applied BH multiple-comparison correction
+  multiple_comparison_note?: string
 }
 
 export interface ClinicalSummaryItem {
@@ -244,7 +246,7 @@ export function useDataExplorerCorrelation(
         matrix: cells,
         n_participants: raw.n_observations ?? 0,
         multiple_comparison_note: raw.multiple_comparison_note,
-      } as CorrelationResponse & { multiple_comparison_note?: string }
+      } as CorrelationResponse
     },
     enabled: enabled && parameters.length >= 2,
     staleTime: 60_000,

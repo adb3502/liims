@@ -136,16 +136,24 @@ function SiteMap({ markers }: SiteMapProps) {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
         />
 
-        {/* Individual participant dots (jittered around site center) */}
+        {/* Individual participant dots — filled = urban site, hollow = rural site */}
         {showParticipants && participantDots.map((dot, i) => (
           <CircleMarker
             key={`pt-${i}`}
             center={[dot.lat, dot.lng]}
             radius={3}
-            pathOptions={{
+            pathOptions={dot.urban ? {
+              // Urban: filled dot
               fillColor: dot.color,
-              fillOpacity: 0.5,
+              fillOpacity: 0.6,
               stroke: false,
+            } : {
+              // Rural: hollow dot (stroke only)
+              fillColor: 'transparent',
+              fillOpacity: 0,
+              color: dot.color,
+              weight: 1.5,
+              opacity: 0.7,
             }}
           />
         ))}

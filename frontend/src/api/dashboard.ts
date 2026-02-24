@@ -69,6 +69,22 @@ export interface QualityStats {
   }
 }
 
+export interface EnrollmentMatrixCell {
+  count: number
+  target: number
+}
+
+export interface EnrollmentMatrixStats {
+  sites: string[]
+  group_codes: string[]
+  matrix: Record<string, Record<string, EnrollmentMatrixCell>>
+  totals: {
+    by_site: Record<string, { count: number; target: number }>
+    by_group: Record<string, { count: number; target: number }>
+    grand: { count: number; target: number }
+  }
+}
+
 export interface DashboardOverview {
   enrollment: { total: number; recent_30d: number }
   samples: { total: number; in_storage: number }
@@ -84,6 +100,7 @@ export const dashboardKeys = {
   all: ['dashboard'] as const,
   overview: () => [...dashboardKeys.all, 'overview'] as const,
   enrollment: () => [...dashboardKeys.all, 'enrollment'] as const,
+  enrollmentMatrix: () => [...dashboardKeys.all, 'enrollment-matrix'] as const,
   inventory: () => [...dashboardKeys.all, 'inventory'] as const,
   fieldOps: () => [...dashboardKeys.all, 'field-ops'] as const,
   instruments: () => [...dashboardKeys.all, 'instruments'] as const,
@@ -108,6 +125,17 @@ export function useDashboardEnrollment() {
     queryKey: dashboardKeys.enrollment(),
     queryFn: async () => {
       const res = await api.get<{ success: true; data: EnrollmentStats }>('/dashboard/enrollment')
+      return res.data.data
+    },
+    staleTime: 60_000,
+  })
+}
+
+export function useDashboardEnrollmentMatrix() {
+  return useQuery({
+    queryKey: dashboardKeys.enrollmentMatrix(),
+    queryFn: async () => {
+      const res = await api.get<{ success: true; data: EnrollmentMatrixStats }>('/dashboard/enrollment-matrix')
       return res.data.data
     },
     staleTime: 60_000,
