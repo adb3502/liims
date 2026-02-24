@@ -658,13 +658,13 @@ class DashboardService:
 
     # ── Enrollment Matrix ─────────────────────────────────────────────
 
-    # Per-site targets: target count per group_code cell (10 cells per age/sex combo).
-    # Derived from participant_range size / 10 group codes.
+    # Per-site targets: target count PER GROUP CODE (per category).
+    # Baptist has 200 slots per group code, others have 100 per group code.
     _SITE_TARGETS: dict[str, int] = {
-        "RMH": 10,      # range 1-100 → 100 participants / 10 group codes
-        "SSSSMH": 10,   # range 101-200 → 100 / 10
-        "BBH": 20,      # range 201-400 → 200 / 10
-        "CHAF": 10,     # range 401-500 → 100 / 10
+        "RMH": 100,     # 100 per category (e.g., 100 males aged 18-29)
+        "SSSSMH": 100,  # 100 per category
+        "BBH": 200,     # 200 per category (largest site)
+        "CHAF": 100,    # 100 per category
         "BMC": 0,       # not active yet
         "JSS": 0,       # not active yet
     }
@@ -723,16 +723,33 @@ class DashboardService:
             if gc in matrix[site_code]:
                 matrix[site_code][gc]["count"] = row.count
             else:
-                matrix[site_code][gc] = {"count": row.count, "target": 0}
+                matrix[site_code][gc] = {"count": row.count, "target": self._SITE_TARGETS.get(site_code, 0)}
 
-        # Compute totals
-        by_site: dict[str, int] = {s["code"]: 0 for s in sites}
-        by_group: dict[str, int] = {gc: 0 for gc in self._GROUP_CODES}
-        for site_code, groups in matrix.items():
-            for gc, cell in groups.items():
-                by_site[site_code] = by_site.get(site_code, 0) + cell["count"]
-                if gc in by_group:
-                    by_group[gc] += cell["count"]
+        # Fill in targets for cells with zero count (so every cell has a target)
+        for site_code in matrix:
+            target = self._SITE_TARGETS.get(site_code, 0)
+            for gc in self._GROUP_CODES:
+                if gc not in matrix[site_code]:
+                    matrix[site_code][gc] = {"count": 0, "target": target}
+                elif matrix[site_code][gc]["target"] == 0:
+                    matrix[site_code][gc]["target"] = target
+
+        # Compute totals as {count, target} objects (not plain ints)
+        by_site: dict[str, dict] = {}
+        for s in sites:
+            sc = s["code"]
+            site_count = sum(cell["count"] for cell in matrix.get(sc, {}).values())
+            site_target = self._SITE_TARGETS.get(sc, 0) * len(self._GROUP_CODES)
+            by_site[sc] = {"count": site_count, "target": site_target}
+
+        by_group: dict[str, dict] = {}
+        for gc in self._GROUP_CODES:
+            gc_count = sum(matrix.get(sc, {}).get(gc, {}).get("count", 0) for sc in [s["code"] for s in sites])
+            gc_target = sum(self._SITE_TARGETS.get(sc, 0) for sc in [s["code"] for s in sites])
+            by_group[gc] = {"count": gc_count, "target": gc_target}
+
+        grand_count = sum(v["count"] for v in by_site.values())
+        grand_target = sum(v["target"] for v in by_site.values())
 
         return {
             "sites": sites,
@@ -741,5 +758,6 @@ class DashboardService:
             "totals": {
                 "by_site": by_site,
                 "by_group": by_group,
+                "grand": {"count": grand_count, "target": grand_target},
             },
         }

@@ -397,7 +397,7 @@ export function DashboardPage() {
           error={enrollmentError ? 'Failed to load enrollment data' : undefined}
           empty={!enrollmentLoading && !enrollmentError && enrollmentTimeSeries.length === 0}
           emptyMessage="No enrollment data yet"
-          height="h-72"
+          height="h-[420px]"
         >
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={enrollmentTimeSeries} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
@@ -443,7 +443,7 @@ export function DashboardPage() {
           error={enrollmentError ? 'Failed to load site data' : undefined}
           empty={!enrollmentLoading && !enrollmentError && siteMarkers.length === 0}
           emptyMessage="No site data available"
-          height="h-72"
+          height="h-[420px]"
         >
           <SiteMap markers={siteMarkers} />
         </ChartCard>

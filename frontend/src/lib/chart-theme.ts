@@ -121,7 +121,7 @@ export const DIVERGING_BWR = [
 
 export const RECHARTS_THEME = {
   grid: { stroke: '#E2E8F0', strokeDasharray: '3 3' },
-  axis: { stroke: '#CBD5E1', fontSize: 11, fontFamily: '"Red Hat Display", sans-serif' },
+  axis: { stroke: '#CBD5E1', fontSize: 11, fontFamily: '"Red Hat Display", sans-serif', fill: '#64748B', tick: { fill: '#64748B' } },
   tooltip: {
     contentStyle: {
       background: 'rgba(255,255,255,0.96)',

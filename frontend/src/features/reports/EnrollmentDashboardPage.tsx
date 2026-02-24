@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { cn } from '@/lib/utils'
 import { useDashboardEnrollment, useDashboardEnrollmentMatrix } from '@/api/dashboard'
 import type { DemographicStats } from '@/api/dashboard'
 import { PageHeader } from '@/components/ui/page-header'
@@ -441,6 +442,7 @@ function GenderDonut({ data }: { data: Array<{ sex: string; count: number }> }) 
 
 function EnrollmentMatrixTable() {
   const { data, isLoading, isError } = useDashboardEnrollmentMatrix()
+  const [showRemaining, setShowRemaining] = useState(false)
 
   if (isLoading) {
     return (
@@ -486,11 +488,39 @@ function EnrollmentMatrixTable() {
 
   return (
     <div className="rounded-xl border border-gray-100 bg-white overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100">
-        <h3 className="text-sm font-semibold text-gray-800">Enrollment Matrix</h3>
-        <p className="text-xs text-gray-400 mt-0.5">
-          Count / target per site and participant group. Progress bars show completion rate.
-        </p>
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800">Enrollment Matrix</h3>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {showRemaining
+              ? 'Slots remaining per site and participant group.'
+              : 'Count / target per site and participant group. Progress bars show completion rate.'}
+          </p>
+        </div>
+        <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1">
+          <button
+            onClick={() => setShowRemaining(false)}
+            className={cn(
+              'rounded-md px-3 py-1 text-xs font-medium transition-all',
+              !showRemaining
+                ? 'bg-white text-primary shadow-sm border border-gray-200'
+                : 'text-gray-500 hover:text-gray-700',
+            )}
+          >
+            Enrolled
+          </button>
+          <button
+            onClick={() => setShowRemaining(true)}
+            className={cn(
+              'rounded-md px-3 py-1 text-xs font-medium transition-all',
+              showRemaining
+                ? 'bg-white text-primary shadow-sm border border-gray-200'
+                : 'text-gray-500 hover:text-gray-700',
+            )}
+          >
+            Slots Remaining
+          </button>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table
@@ -529,6 +559,7 @@ function EnrollmentMatrixTable() {
                     const cell = matrix[siteCode]?.[gc]
                     const count = cell?.count ?? 0
                     const target = cell?.target ?? 0
+                    const remaining = Math.max(0, target - count)
                     const pct = target > 0 ? Math.min((count / target) * 100, 100) : 0
                     const barColor = pct >= 100
                       ? COLORS.success
@@ -540,11 +571,25 @@ function EnrollmentMatrixTable() {
                     return (
                       <td key={gc} className="px-3 py-2 text-center">
                         <span className="tabular-nums text-gray-700">
-                          {count > 0 ? count : (
-                            <span className="text-gray-300">—</span>
-                          )}
-                          {target > 0 && (
-                            <span className="text-gray-400">/{target}</span>
+                          {showRemaining ? (
+                            // Slots remaining view
+                            target > 0 ? (
+                              <span className={remaining > 0 ? 'text-amber-600 font-medium' : 'text-emerald-600 font-medium'}>
+                                {remaining > 0 ? remaining : 'Full'}
+                              </span>
+                            ) : (
+                              <span className="text-gray-300">—</span>
+                            )
+                          ) : (
+                            // Enrolled view
+                            <>
+                              {count > 0 ? count : (
+                                <span className="text-gray-300">—</span>
+                              )}
+                              {target > 0 && (
+                                <span className="text-gray-400">/{target}</span>
+                              )}
+                            </>
                           )}
                         </span>
                         {target > 0 && (
