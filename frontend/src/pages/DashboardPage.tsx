@@ -17,10 +17,12 @@ import { cn } from '@/lib/utils'
 import {
   AreaChart,
   Area,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip as RechartsTooltip,
+  Legend,
   ResponsiveContainer,
   BarChart,
   Bar,
@@ -388,20 +390,46 @@ export function DashboardPage() {
     })
   }, [enrollment?.by_site])
 
-  // Enrollment time series
+  // Per-site codes from enrollment_by_site_month
+  const siteCodes = useMemo(() => {
+    const bySiteMonth = enrollment?.enrollment_by_site_month
+    if (!bySiteMonth?.length) return [] as string[]
+    return [...new Set(bySiteMonth.map(d => d.site_code))].sort()
+  }, [enrollment?.enrollment_by_site_month])
+
+  const SITE_SHORT_NAMES: Record<string, string> = {
+    BBH: 'BBH', RMH: 'RMH', SSSSMH: 'SSSSMH', CHAF: 'CHAF', BMC: 'BMC', JSS: 'JSS',
+  }
+
+  // Enrollment time series with per-site breakdown
   const enrollmentTimeSeries = useMemo(() => {
     const timeData = enrollment?.enrollment_over_time ?? enrollment?.enrollment_rate_30d
     if (!timeData) return []
+
+    // Build per-site lookup: date → { site_code: count }
+    const siteByDate = new Map<string, Record<string, number>>()
+    if (enrollment?.enrollment_by_site_month) {
+      for (const d of enrollment.enrollment_by_site_month) {
+        if (!siteByDate.has(d.date)) siteByDate.set(d.date, {})
+        siteByDate.get(d.date)![d.site_code] = d.count
+      }
+    }
+
     let cumulative = 0
     return timeData.map((d) => {
       cumulative += d.count
-      return {
+      const row: Record<string, unknown> = {
         ...d,
         cumulative,
         dateLabel: formatDate(d.date),
       }
+      const siteData = siteByDate.get(d.date) || {}
+      for (const sc of siteCodes) {
+        row[sc] = siteData[sc] || 0
+      }
+      return row
     })
-  }, [enrollment?.enrollment_over_time, enrollment?.enrollment_rate_30d])
+  }, [enrollment?.enrollment_over_time, enrollment?.enrollment_rate_30d, enrollment?.enrollment_by_site_month, siteCodes])
 
   return (
     <div className="space-y-6">
@@ -446,12 +474,12 @@ export function DashboardPage() {
           <StatCard
             title="Total Participants"
             value={overview ? formatNumber(overview.enrollment.total) : '--'}
-            subtitle={overview ? `+${overview.enrollment.recent_30d} in last 30 days` : undefined}
+            subtitle={overview ? `+${overview.enrollment.recent_30d} this month` : undefined}
             icon={<Users className="h-5 w-5" />}
             accentColor={COLORS.primary}
             trend={overview?.enrollment.recent_30d ? {
               value: overview.enrollment.recent_30d,
-              label: `new in last 30 days`,
+              label: `new this month`,
             } : undefined}
           />
           <StatCard
@@ -513,15 +541,43 @@ export function DashboardPage() {
                 tickFormatter={(v: number) => formatNumber(v)}
               />
               <RechartsTooltip content={<CustomTooltip />} />
+              <Legend
+                iconType="plainline"
+                wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+              />
               <Area
                 type="monotone"
                 dataKey="cumulative"
+                name="Cumulative"
                 stroke={COLORS.primary}
-                strokeWidth={2}
+                strokeWidth={2.5}
                 fill="url(#enrollGradient)"
                 dot={false}
-                activeDot={{ r: 4, fill: COLORS.primary, strokeWidth: 0 }}
+                activeDot={{ r: 4, fill: COLORS.primary, stroke: '#fff', strokeWidth: 2 }}
               />
+              <Area
+                type="monotone"
+                dataKey="count"
+                name="New / Month"
+                stroke={COLORS.teal}
+                strokeWidth={1.5}
+                fill="none"
+                strokeDasharray="4 4"
+                dot={false}
+              />
+              {siteCodes.map((sc, i) => (
+                <Line
+                  key={sc}
+                  type="monotone"
+                  dataKey={sc}
+                  name={SITE_SHORT_NAMES[sc] || sc}
+                  stroke={SITE_COLORS[i % SITE_COLORS.length]}
+                  strokeWidth={1.5}
+                  strokeDasharray="3 3"
+                  dot={false}
+                  activeDot={{ r: 3 }}
+                />
+              ))}
             </AreaChart>
           </ResponsiveContainer>
         </ChartCard>

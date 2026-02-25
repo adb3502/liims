@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { useDashboardEnrollment, useDashboardEnrollmentMatrix } from '@/api/dashboard'
 import type { DemographicStats } from '@/api/dashboard'
@@ -18,6 +19,7 @@ import {
 import {
   AreaChart,
   Area,
+  Line,
   BarChart,
   Bar,
   PieChart,
@@ -30,7 +32,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
-import { Users, MapPin, UserCheck, CalendarPlus, Activity, Droplets } from 'lucide-react'
+import { Users, MapPin, UserCheck, CalendarPlus } from 'lucide-react'
 
 // ──── Types ────
 
@@ -69,13 +71,12 @@ const AGE_BINS_STUDY = [
 
 // AGE_BINS_CONTINUOUS removed — continuous tab now uses 1-year bins computed inline
 
+const AGE_GROUP_ENTRIES = Object.entries(AGE_GROUP_LABELS)
+
 const HBAIC_BINS = [
-  { label: '<5.0',     min: 0,   max: 5.0,  category: 'Normal' },
-  { label: '5.0-5.6',  min: 5.0, max: 5.7,  category: 'Normal' },
-  { label: '5.7-6.4',  min: 5.7, max: 6.5,  category: 'Prediabetic' },
-  { label: '6.5-7.4',  min: 6.5, max: 7.5,  category: 'Diabetic' },
-  { label: '7.5-8.9',  min: 7.5, max: 9.0,  category: 'Diabetic' },
-  { label: '9.0+',     min: 9.0, max: Infinity, category: 'Diabetic' },
+  { label: 'Normal (<5.7%)', min: 0, max: 5.7, category: 'Normal' },
+  { label: 'Prediabetic (5.7-6.4%)', min: 5.7, max: 6.5, category: 'Prediabetic' },
+  { label: 'Diabetic (≥6.5%)', min: 6.5, max: Infinity, category: 'Diabetic' },
 ]
 
 // ──── Toggle Button Group ────
@@ -147,24 +148,59 @@ function ChartTooltip({
 
 // ──── Enrollment Trend Chart ────
 
+const SITE_SHORT_NAMES: Record<string, string> = {
+  BBH: 'BBH',
+  RMH: 'RMH',
+  SSSSMH: 'SSSSMH',
+  CHAF: 'CHAF',
+  BMC: 'BMC',
+  JSS: 'JSS',
+}
+
 function EnrollmentTrendChart({
   data,
+  bySiteMonth,
 }: {
   data: Array<{ date: string; count: number }>
+  bySiteMonth?: Array<{ date: string; site_code: string; count: number }>
 }) {
+  // Get unique site codes from per-site data
+  const siteCodes = useMemo(() => {
+    if (!bySiteMonth?.length) return []
+    return [...new Set(bySiteMonth.map(d => d.site_code))].sort()
+  }, [bySiteMonth])
+
   const chartData = useMemo(() => {
-    return data.reduce<Array<{ date: string; count: number; cumulative: number; label: string }>>(
+    // Build per-site lookup: date → { site_code: count }
+    const siteByDate = new Map<string, Record<string, number>>()
+    if (bySiteMonth) {
+      for (const d of bySiteMonth) {
+        if (!siteByDate.has(d.date)) siteByDate.set(d.date, {})
+        siteByDate.get(d.date)![d.site_code] = d.count
+      }
+    }
+
+    return data.reduce<Array<Record<string, unknown>>>(
       (acc, d) => {
-        const prev = acc.length > 0 ? acc[acc.length - 1].cumulative : 0
-        acc.push({ ...d, cumulative: prev + d.count, label: formatDateLabel(d.date) })
-        return acc
+        const prev = acc.length > 0 ? (acc[acc.length - 1].cumulative as number) : 0
+        const row: Record<string, unknown> = {
+          ...d,
+          cumulative: prev + d.count,
+          label: formatDateLabel(d.date),
+        }
+        // Add per-site counts for this month
+        const siteData = siteByDate.get(d.date) || {}
+        for (const sc of siteCodes) {
+          row[sc] = siteData[sc] || 0
+        }
+        return [...acc, row]
       },
       [],
     )
-  }, [data])
+  }, [data, bySiteMonth, siteCodes])
 
   const latestCumulative =
-    chartData.length > 0 ? chartData[chartData.length - 1].cumulative : 0
+    chartData.length > 0 ? (chartData[chartData.length - 1].cumulative as number) : 0
 
   return (
     <ChartCard
@@ -195,6 +231,10 @@ function EnrollmentTrendChart({
             width={40}
           />
           <Tooltip content={<ChartTooltip />} />
+          <Legend
+            iconType="plainline"
+            wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+          />
           <Area
             type="monotone"
             dataKey="cumulative"
@@ -208,13 +248,27 @@ function EnrollmentTrendChart({
           <Area
             type="monotone"
             dataKey="count"
-            name="New This Month"
+            name="New / Month"
             stroke={COLORS.teal}
             strokeWidth={1.5}
             fill="none"
             strokeDasharray="4 4"
             dot={false}
           />
+          {/* Per-site dotted lines */}
+          {siteCodes.map((sc, i) => (
+            <Line
+              key={sc}
+              type="monotone"
+              dataKey={sc}
+              name={SITE_SHORT_NAMES[sc] || sc}
+              stroke={SITE_COLORS[i % SITE_COLORS.length]}
+              strokeWidth={1.5}
+              strokeDasharray="3 3"
+              dot={false}
+              activeDot={{ r: 3 }}
+            />
+          ))}
         </AreaChart>
       </ResponsiveContainer>
     </ChartCard>
@@ -1100,6 +1154,7 @@ function HbA1cChart({ demographics }: { demographics: DemographicStats }) {
 // ──── Enrollment Matrix Table ────
 
 function EnrollmentMatrixTable() {
+  const navigate = useNavigate()
   const { data, isLoading, isError } = useDashboardEnrollmentMatrix()
   const [showRemaining, setShowRemaining] = useState(false)
 
@@ -1216,8 +1271,14 @@ function EnrollmentMatrixTable() {
                   : 0
               return (
                 <tr key={siteCode} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-2 font-semibold text-gray-800 whitespace-nowrap">
-                    {siteName}
+                  <td className="px-4 py-3 font-semibold text-gray-800 whitespace-nowrap">
+                    <button
+                      onClick={() => navigate(`/reports/enrollment/sites/${siteCode}`)}
+                      className="text-left hover:text-primary hover:underline underline-offset-2 transition-colors cursor-pointer"
+                      title={`View ${siteName} enrollment dashboard`}
+                    >
+                      {siteName}
+                    </button>
                   </td>
                   {group_codes.map(gc => {
                     const cell = matrix[siteCode]?.[gc]
@@ -1234,7 +1295,7 @@ function EnrollmentMatrixTable() {
                             ? COLORS.teal
                             : COLORS.gray400
                     return (
-                      <td key={gc} className="px-3 py-2 text-center">
+                      <td key={gc} className="px-3 py-3 text-center">
                         <span className="tabular-nums text-gray-700">
                           {showRemaining ? (
                             target > 0 ? (
@@ -1271,7 +1332,7 @@ function EnrollmentMatrixTable() {
                       </td>
                     )
                   })}
-                  <td className="px-4 py-2 text-right">
+                  <td className="px-4 py-3 text-right">
                     <span className="tabular-nums font-semibold text-gray-800">
                       {siteTotal?.count?.toLocaleString() ?? '—'}
                     </span>
@@ -1339,11 +1400,6 @@ function EnrollmentMatrixTable() {
           </tfoot>
         </table>
       </div>
-      <p className="px-4 py-2 text-[10px] text-gray-400 border-t border-gray-100">
-        Group codes: first digit = age group (1=18-29, 2=30-44, 3=45-59, 4=60-74, 5=75+),
-        letter = sex (A=male, B=female). Progress bar color: green = 100%, blue = 75%+,
-        teal = 40%+, gray = &lt;40%.
-      </p>
     </div>
   )
 }
@@ -1421,24 +1477,6 @@ export function EnrollmentDashboardPage() {
         ? `${urbanCount} : 0`
         : '--'
 
-  // Age summary from continuous distribution — memoized to avoid reference churn
-  const ageValues = useMemo(
-    () => demographics?.age_distribution ?? [],
-    [demographics?.age_distribution],
-  )
-  const { medianAge, minAge, maxAge } = useMemo(() => {
-    if (ageValues.length === 0) return { medianAge: null, minAge: null, maxAge: null }
-    const sorted = [...ageValues].sort((a, b) => a - b)
-    const mid = Math.floor(sorted.length / 2)
-    const median =
-      sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
-    return {
-      medianAge: median,
-      minAge: sorted[0],
-      maxAge: sorted[sorted.length - 1],
-    }
-  }, [ageValues])
-
   // ── Loading ──
   if (isLoading) {
     return (
@@ -1512,8 +1550,8 @@ export function EnrollmentDashboardPage() {
         gradient
       />
 
-      {/* Row 0: Top Stat Cards — 2 fixed + 2 summary */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+      {/* Row 0: Top Stat Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6">
         <StatCard
           title="Total Enrolled"
           value={totalEnrolled.toLocaleString()}
@@ -1529,27 +1567,16 @@ export function EnrollmentDashboardPage() {
           accentColor={COLORS.teal}
         />
         <StatCard
-          title="Recent (30d)"
+          title="This Month"
           value={recent30d > 0 ? `+${recent30d.toLocaleString()}` : '0'}
-          subtitle="Enrolled in last 30 days"
+          subtitle="Enrolled this month"
           icon={<CalendarPlus className="h-5 w-5" />}
           accentColor={COLORS.success}
-        />
-        <StatCard
-          title="HbA1c Tested"
-          value={(
-            (demographics?.hba1c_status.normal ?? 0) +
-            (demographics?.hba1c_status.prediabetic ?? 0) +
-            (demographics?.hba1c_status.diabetic ?? 0)
-          ).toLocaleString()}
-          subtitle={`${demographics?.hba1c_status.diabetic ?? 0} diabetic, ${demographics?.hba1c_status.prediabetic ?? 0} prediabetic`}
-          icon={<Droplets className="h-5 w-5" />}
-          accentColor={HBA1C_COLORS.Normal}
         />
       </div>
 
       {/* Row 1: Ratio Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6">
         {/* M:F Ratio */}
         <RatioCard
           title="M : F Ratio"
@@ -1576,45 +1603,24 @@ export function EnrollmentDashboardPage() {
           </p>
         </RatioCard>
 
-        {/* HbA1c Status */}
+        {/* Age Categories */}
         <RatioCard
-          title="HbA1c Status"
-          icon={<Activity className="h-5 w-5" />}
-          accentColor={HBA1C_COLORS.Normal}
-        >
-          <div className="flex items-baseline gap-2 flex-wrap">
-            <span className="text-xs font-semibold tabular-nums" style={{ color: HBA1C_COLORS.Normal }}>
-              {(demographics?.hba1c_status.normal ?? 0).toLocaleString()} Normal
-            </span>
-            <span className="text-gray-300 text-xs">|</span>
-            <span className="text-xs font-semibold tabular-nums" style={{ color: HBA1C_COLORS.Prediabetic }}>
-              {(demographics?.hba1c_status.prediabetic ?? 0).toLocaleString()} Pre
-            </span>
-            <span className="text-gray-300 text-xs">|</span>
-            <span className="text-xs font-semibold tabular-nums" style={{ color: HBA1C_COLORS.Diabetic }}>
-              {(demographics?.hba1c_status.diabetic ?? 0).toLocaleString()} DM
-            </span>
-          </div>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Normal &lt;5.7%, Pre 5.7-6.4%, DM ≥6.5%
-          </p>
-        </RatioCard>
-
-        {/* Age Summary */}
-        <RatioCard
-          title="Age Summary"
+          title="Age Categories"
           icon={<Users className="h-5 w-5" />}
           accentColor={COLORS.primary}
         >
-          {medianAge !== null ? (
-            <>
-              <p className="text-2xl font-bold text-gray-900 tabular-nums">
-                {medianAge.toFixed(0)} yrs
-              </p>
-              <p className="text-xs text-gray-500">
-                Median age, range {minAge?.toFixed(0)}–{maxAge?.toFixed(0)} yrs
-              </p>
-            </>
+          {demographics?.by_age_group && demographics.by_age_group.length > 0 ? (
+            <div className="grid grid-cols-5 gap-1 w-full">
+              {AGE_GROUP_ENTRIES.map(([key, label]) => {
+                const count = demographics.by_age_group.find(g => String(g.age_group) === key)?.count ?? 0
+                return (
+                  <div key={key} className="text-center">
+                    <p className="text-sm font-bold text-gray-900 tabular-nums">{count}</p>
+                    <p className="text-[10px] text-gray-500 leading-tight">{label}</p>
+                  </div>
+                )
+              })}
+            </div>
           ) : (
             <>
               <p className="text-2xl font-bold text-gray-900">--</p>
@@ -1626,7 +1632,7 @@ export function EnrollmentDashboardPage() {
 
       {/* Row 2: Trend + Pyramid */}
       <div className="grid gap-4 lg:grid-cols-2 mb-6">
-        <EnrollmentTrendChart data={data?.enrollment_over_time ?? []} />
+        <EnrollmentTrendChart data={data?.enrollment_over_time ?? []} bySiteMonth={data?.enrollment_by_site_month} />
         {demographics ? (
           <DemographicsPyramid demographics={demographics} />
         ) : (

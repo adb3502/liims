@@ -30,12 +30,24 @@ class DashboardService:
 
     # ── Enrollment Summary ────────────────────────────────────────────
 
-    async def enrollment_summary(self) -> dict:
-        """Total participants, by site, by wave, enrollment rate over time."""
+    async def enrollment_summary(self, site_code: str | None = None) -> dict:
+        """Total participants, by site, by wave, enrollment rate over time.
+
+        When site_code is provided, all stats are filtered to that single site.
+        """
+        # Resolve site filter if provided
+        site_filter = []
+        if site_code:
+            site_row = (await self.db.execute(
+                select(CollectionSite.id).where(CollectionSite.code == site_code)
+            )).scalar_one_or_none()
+            if site_row:
+                site_filter = [Participant.collection_site_id == site_row]
+
+        base_where = [Participant.is_deleted == False, *site_filter]  # noqa: E712
+
         # Total participants
-        total_q = select(func.count()).where(
-            Participant.is_deleted == False  # noqa: E712
-        )
+        total_q = select(func.count()).where(*base_where)
         total = (await self.db.execute(total_q)).scalar_one()
 
         # By collection site
@@ -46,7 +58,7 @@ class DashboardService:
                 func.count(Participant.id).label("count"),
             )
             .join(Participant, Participant.collection_site_id == CollectionSite.id)
-            .where(Participant.is_deleted == False)  # noqa: E712
+            .where(Participant.is_deleted == False, *site_filter)  # noqa: E712
             .group_by(CollectionSite.name, CollectionSite.code)
             .order_by(func.count(Participant.id).desc())
         )
@@ -62,15 +74,15 @@ class DashboardService:
                 Participant.wave,
                 func.count(Participant.id).label("count"),
             )
-            .where(Participant.is_deleted == False)  # noqa: E712
+            .where(*base_where)
             .group_by(Participant.wave)
             .order_by(Participant.wave.asc())
         )
         by_wave_rows = (await self.db.execute(by_wave_q)).all()
         by_wave = [{"wave": r[0], "count": r[1]} for r in by_wave_rows]
 
-        # Enrollment rate over last 30 days (by date)
-        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+        # Enrollment rate this month (resets on 1st)
+        first_of_month = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         day_expr = func.date_trunc("day", Participant.enrollment_date)
         rate_q = (
             select(
@@ -78,8 +90,8 @@ class DashboardService:
                 func.count(Participant.id).label("count"),
             )
             .where(
-                Participant.is_deleted == False,  # noqa: E712
-                Participant.enrollment_date >= thirty_days_ago,
+                *base_where,
+                Participant.enrollment_date >= first_of_month,
             )
             .group_by(day_expr)
             .order_by(day_expr.asc())
@@ -96,7 +108,7 @@ class DashboardService:
                 Participant.age_group,
                 func.count(Participant.id).label("count"),
             )
-            .where(Participant.is_deleted == False)  # noqa: E712
+            .where(*base_where)
             .group_by(Participant.age_group)
             .order_by(Participant.age_group.asc())
         )
@@ -112,7 +124,7 @@ class DashboardService:
                 Participant.sex,
                 func.count(Participant.id).label("count"),
             )
-            .where(Participant.is_deleted == False)  # noqa: E712
+            .where(*base_where)
             .group_by(Participant.sex)
         )
         by_sex_rows = (await self.db.execute(by_sex_q)).all()
@@ -128,7 +140,7 @@ class DashboardService:
                 Participant.sex,
                 func.count(Participant.id).label("count"),
             )
-            .where(Participant.is_deleted == False)  # noqa: E712
+            .where(*base_where)
             .group_by(Participant.age_group, Participant.sex)
             .order_by(Participant.age_group.asc(), Participant.sex.asc())
         )
@@ -142,21 +154,21 @@ class DashboardService:
             for r in by_age_sex_rows
         ]
 
-        # Recent 30 days count
-        recent_30d_q = select(func.count()).where(
-            Participant.is_deleted == False,  # noqa: E712
-            Participant.enrollment_date >= thirty_days_ago,
+        # This month count
+        recent_month_q = select(func.count()).where(
+            *base_where,
+            Participant.enrollment_date >= first_of_month,
         )
-        recent_30d = (await self.db.execute(recent_30d_q)).scalar_one()
+        recent_30d = (await self.db.execute(recent_month_q)).scalar_one()
 
-        # Enrollment over ALL time (monthly, not just 30 days)
+        # Enrollment over ALL time (monthly)
         month_expr = func.date_trunc("month", Participant.enrollment_date)
         all_time_q = (
             select(
                 month_expr.label("month"),
                 func.count(Participant.id).label("count"),
             )
-            .where(Participant.is_deleted == False)  # noqa: E712
+            .where(*base_where)
             .group_by(month_expr)
             .order_by(month_expr.asc())
         )
@@ -166,15 +178,40 @@ class DashboardService:
             for r in all_time_rows
         ]
 
+        # Per-site monthly enrollment breakdown (skip for single-site view)
+        enrollment_by_site_month = []
+        if not site_code:
+            per_site_month_q = (
+                select(
+                    month_expr.label("month"),
+                    CollectionSite.code.label("site_code"),
+                    func.count(Participant.id).label("count"),
+                )
+                .join(CollectionSite, Participant.collection_site_id == CollectionSite.id)
+                .where(Participant.is_deleted == False)  # noqa: E712
+                .group_by(month_expr, CollectionSite.code)
+                .order_by(month_expr.asc(), CollectionSite.code)
+            )
+            per_site_month_rows = (await self.db.execute(per_site_month_q)).all()
+            enrollment_by_site_month = [
+                {"date": r[0].isoformat() if r[0] else None, "site_code": r[1], "count": r[2]}
+                for r in per_site_month_rows
+            ]
+
         # Urban vs Rural: derive from site code
-        # BBH, RMH, CHAF, BMC = urban; SSSSMH = rural
         urban_sites = {"BBH", "RMH", "CHAF", "BMC", "JSS"}
         rural_sites = {"SSSSMH"}
         urban_count = sum(s["count"] for s in by_site if s["site_code"] in urban_sites)
         rural_count = sum(s["count"] for s in by_site if s["site_code"] in rural_sites)
 
         # HbA1c classification from lab results
-        # Normal: <5.7%, Prediabetic: 5.7-6.4%, Diabetic: >=6.5%
+        hba1c_where = [
+            CanonicalTest.canonical_name == "hba1c",
+            Participant.is_deleted == False,  # noqa: E712
+            PartnerLabResult.test_value.isnot(None),
+        ]
+        if site_filter:
+            hba1c_where.extend(site_filter)
         hba1c_q = await self.db.execute(select(
             PartnerLabResult.test_value,
             Participant.id,
@@ -182,15 +219,11 @@ class DashboardService:
             Participant, PartnerLabResult.participant_id == Participant.id
         ).join(
             CanonicalTest, PartnerLabResult.canonical_test_id == CanonicalTest.id
-        ).where(
-            CanonicalTest.canonical_name == "hba1c",
-            Participant.is_deleted == False,  # noqa: E712
-            PartnerLabResult.test_value.isnot(None),
-        ))
+        ).where(*hba1c_where))
         hba1c_normal = 0
         hba1c_prediabetic = 0
         hba1c_diabetic = 0
-        hba1c_values = []  # for distribution
+        hba1c_values = []
         seen_participants = set()
         for row in hba1c_q.all():
             try:
@@ -214,7 +247,7 @@ class DashboardService:
         age_q = await self.db.execute(
             select(Participant.clinical_data["demographics"]["age"].as_string())
             .where(
-                Participant.is_deleted == False,  # noqa: E712
+                *base_where,
                 Participant.clinical_data.isnot(None),
             )
         )
@@ -232,6 +265,7 @@ class DashboardService:
             "by_wave": by_wave,
             "enrollment_rate_30d": enrollment_rate,
             "enrollment_over_time": enrollment_over_time,
+            "enrollment_by_site_month": enrollment_by_site_month,
             "recent_30d": recent_30d,
             "demographics": {
                 "by_age_group": by_age_group,
@@ -635,10 +669,10 @@ class DashboardService:
         )
         participants = (await self.db.execute(participants_q)).scalar_one()
 
-        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+        first_of_month = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         recent_enrollment_q = select(func.count()).where(
             Participant.is_deleted == False,  # noqa: E712
-            Participant.enrollment_date >= thirty_days_ago,
+            Participant.enrollment_date >= first_of_month,
         )
         recent_30d = (await self.db.execute(recent_enrollment_q)).scalar_one()
 

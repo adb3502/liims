@@ -15,7 +15,6 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
-  Dna,
 } from 'lucide-react'
 
 interface NavItem {
@@ -172,9 +171,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <div className="flex h-16 items-center px-4 border-b border-white/[0.06]">
         {!collapsed ? (
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary">
-              <Dna className="h-4.5 w-4.5 text-white" />
-            </div>
+            <img src="/logo-icon.svg" alt="LIIMS" className="h-8 w-8 rounded-lg" />
             <div>
               <span className="text-[15px] font-bold tracking-tight text-white">
                 LIIMS
@@ -185,9 +182,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             </div>
           </div>
         ) : (
-          <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary">
-            <Dna className="h-4.5 w-4.5 text-white" />
-          </div>
+          <img src="/logo-icon.svg" alt="LIIMS" className="mx-auto h-8 w-8 rounded-lg" />
         )}
       </div>
 

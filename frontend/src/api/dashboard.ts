@@ -23,6 +23,7 @@ export interface EnrollmentStats {
   by_wave: Array<{ wave: number; count: number }>
   enrollment_rate_30d: Array<{ date: string; count: number }>
   enrollment_over_time: Array<{ date: string; count: number }>
+  enrollment_by_site_month?: Array<{ date: string; site_code: string; count: number }>
   recent_30d: number
   demographics?: DemographicStats
 }
@@ -111,6 +112,7 @@ export const dashboardKeys = {
   overview: () => [...dashboardKeys.all, 'overview'] as const,
   enrollment: () => [...dashboardKeys.all, 'enrollment'] as const,
   enrollmentMatrix: () => [...dashboardKeys.all, 'enrollment-matrix'] as const,
+  enrollmentBySite: (code: string) => [...dashboardKeys.all, 'enrollment', 'site', code] as const,
   inventory: () => [...dashboardKeys.all, 'inventory'] as const,
   fieldOps: () => [...dashboardKeys.all, 'field-ops'] as const,
   instruments: () => [...dashboardKeys.all, 'instruments'] as const,
@@ -138,6 +140,21 @@ export function useDashboardEnrollment() {
       return res.data.data
     },
     staleTime: 60_000,
+  })
+}
+
+export function useDashboardEnrollmentBySite(siteCode: string) {
+  return useQuery({
+    queryKey: dashboardKeys.enrollmentBySite(siteCode),
+    queryFn: async () => {
+      const res = await api.get<{ success: true; data: EnrollmentStats }>(
+        '/dashboard/enrollment',
+        { params: { site_code: siteCode } }
+      )
+      return res.data.data
+    },
+    staleTime: 60_000,
+    enabled: !!siteCode,
   })
 }
 

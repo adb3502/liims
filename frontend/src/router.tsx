@@ -53,6 +53,7 @@ import { SampleProcessingPage } from '@/features/samples/SampleProcessingPage'
 import { SampleQueuePage } from '@/features/instruments/SampleQueuePage'
 import { LabelGeneratorPage } from '@/features/samples/LabelGeneratorPage'
 import { SitesDashboardPage } from '@/features/reports/SitesDashboardPage'
+import { SiteEnrollmentDashboardPage } from '@/features/reports/SiteEnrollmentDashboardPage'
 import type { UserRole } from '@/types'
 
 // --- Route guards ---
@@ -235,6 +236,7 @@ export const routes: RouteObject[] = [
         path: 'reports',
         children: [
           { path: 'enrollment', element: <EnrollmentDashboardPage /> },
+          { path: 'enrollment/sites/:siteCode', element: <SiteEnrollmentDashboardPage /> },
           { path: 'inventory', element: <InventoryDashboardPage /> },
           { path: 'sites', element: <SitesDashboardPage /> },
           { path: 'data-availability', element: <ReportGeneratorPage /> },

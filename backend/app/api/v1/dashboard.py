@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_role
@@ -24,9 +24,10 @@ ALL_ROLES = (
 async def get_enrollment_stats(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
+    site_code: str | None = Query(None, description="Filter by collection site code (e.g. BBH, RMH)"),
 ):
     svc = DashboardService(db)
-    data = await svc.enrollment_summary()
+    data = await svc.enrollment_summary(site_code=site_code)
     return {"success": True, "data": data}
 
 
