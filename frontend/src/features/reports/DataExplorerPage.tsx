@@ -24,11 +24,13 @@ import {
   useDataExplorerParameters,
   useDataExplorerDistribution,
   useDataExplorerCorrelation,
+  useDataExplorerScatter,
   useDataExplorerCounts,
   type DataExplorerFilters,
   type ParameterMeta,
   type CohortCounts,
   type RawDataPoint,
+  type ScatterPoint,
 } from '@/api/data-explorer'
 import {
   FlaskConical,
@@ -44,6 +46,7 @@ import {
   Beaker,
   Filter,
   Lock,
+  ScatterChart,
 } from 'lucide-react'
 
 // ---- Constants ----
@@ -81,7 +84,7 @@ const SITE_TYPE_OPTIONS = [
   { value: 'Rural', label: 'Rural' },
 ]
 
-const TABS = ['Distribution', 'Correlation', 'Advanced Analytics'] as const
+const TABS = ['Distribution', 'Scatter', 'Correlation', 'Advanced Analytics'] as const
 type Tab = (typeof TABS)[number]
 
 const CHART_TYPES = ['box', 'violin', 'half-violin', 'histogram', 'density'] as const
@@ -112,6 +115,7 @@ const COLOR_BY_OPTIONS = [
   { value: 'group', label: 'Default' },
   { value: 'age_group', label: 'Age Group' },
   { value: 'sex', label: 'Sex' },
+  { value: 'age_sex', label: 'Age + Sex' },
   { value: 'site', label: 'Centre' },
   { value: 'site_type', label: 'Site (Urban/Rural)' },
 ] as const
@@ -843,6 +847,12 @@ function getPointColor(pt: RawDataPoint, colorByDim: ColorBy, palette: PaletteNa
     const siteType = CENTRE_SITE_TYPE[pt.site_code ?? ''] ?? 'Urban'
     return palette !== 'default' ? COLOR_PALETTES[palette].colors[siteType === 'Urban' ? 0 : 1] : (siteType === 'Urban' ? '#3674F6' : '#059669')
   }
+  if (colorByDim === 'age_sex') {
+    // 10 combos: 5 age groups × 2 sexes
+    const idx = ((pt.age_group - 1) * 2 + (pt.sex === 'A' ? 0 : 1))
+    const defaultColors = ['#3674F6', '#EC4899', '#03B6D9', '#F472B6', '#8B5CF6', '#F97316', '#059669', '#DC2626', '#6366F1', '#14B8A6']
+    return palette !== 'default' ? COLOR_PALETTES[palette].colors[idx % COLOR_PALETTES[palette].colors.length] : defaultColors[idx % defaultColors.length]
+  }
   return COLORS.primary
 }
 
@@ -864,6 +874,11 @@ function buildPointHoverText(pt: RawDataPoint): string {
 function getColorCategory(pt: RawDataPoint, colorByDim: ColorBy): string {
   if (colorByDim === 'age_group') return AGE_GROUP_LABELS[String(pt.age_group)] || String(pt.age_group)
   if (colorByDim === 'sex') return pt.sex === 'A' ? 'Male' : 'Female'
+  if (colorByDim === 'age_sex') {
+    const age = AGE_GROUP_LABELS[String(pt.age_group)] || String(pt.age_group)
+    const sex = pt.sex === 'A' ? 'M' : 'F'
+    return `${age} ${sex}`
+  }
   if (colorByDim === 'site') return pt.site_code || 'Unknown'
   if (colorByDim === 'site_type') return CENTRE_SITE_TYPE[pt.site_code ?? ''] ?? 'Unknown'
   return ''
@@ -1020,7 +1035,7 @@ function DistributionTab({
             width: (side && showPoints) ? 0.4 : 0.5,
             boxpoints: useColorOverlay ? false : (showPoints ? ('all' as const) : ('outliers' as const)),
             jitter: 0.4,
-            pointpos: side ? -1.5 : 0,
+            pointpos: side ? -1.8 : 0,
             marker: { color, size: 4, opacity: 0.7 },
             line: { color },
             fillcolor: `${color}33`,
@@ -1048,9 +1063,7 @@ function DistributionTab({
             meanline: { visible: true },
             points: useColorOverlay ? (false as const) : (showPoints ? ('all' as const) : (false as const)),
             jitter: 0.3,
-            // Half violin: -0.6 keeps default points snug to the half shape
-            // Full violin with side: -1.5 pushes points well left of the full shape
-            pointpos: useHalfSide ? -0.6 : (side ? -1.5 : 0),
+            pointpos: useHalfSide ? -0.4 : (side ? -1.8 : 0),
             marker: { color, size: 4, opacity: 0.7 },
             line: { color },
             fillcolor: `${color}33`,
@@ -1075,15 +1088,15 @@ function DistributionTab({
           let ptOffset: number
           let ptSpread: number
           if (chartType === 'box') {
-            ptOffset = side ? -0.25 : 0
-            ptSpread = side ? 0.18 : 0.3
+            ptOffset = side ? -0.32 : -0.05
+            ptSpread = side ? 0.18 : 0.25
           } else if (isHalfViolin) {
-            ptOffset = -0.12
-            ptSpread = 0.16
+            ptOffset = -0.18
+            ptSpread = 0.14
           } else {
-            // Full violin: points well left to clear the shape
-            ptOffset = side ? -0.38 : 0
-            ptSpread = side ? 0.18 : 0.3
+            // Full violin: keep points overlapping the shape center
+            ptOffset = side ? -0.45 : -0.05
+            ptSpread = side ? 0.15 : 0.25
           }
 
           for (const [cat, pts] of catMap) {
@@ -1480,6 +1493,7 @@ function CorrelationTab({
   const [showCellText, setShowCellText] = useState(false)
   const plotContainerRef = useRef<HTMLDivElement>(null)
   const [showExport, setShowExport] = useState(false)
+  const [paramSearch, setParamSearch] = useState('')
 
   function toggleParam(key: string) {
     setSelected((prev) =>
@@ -1610,6 +1624,19 @@ function CorrelationTab({
     }
     return map
   }, [parameters])
+
+  const filteredCategories = useMemo(() => {
+    if (!paramSearch.trim()) return categories
+    const q = paramSearch.trim().toLowerCase()
+    const filtered = new Map<string, ParameterMeta[]>()
+    for (const [cat, params] of categories) {
+      const matches = params.filter(
+        (p) => p.label.toLowerCase().includes(q) || p.key.toLowerCase().includes(q) || (p.unit && p.unit.toLowerCase().includes(q))
+      )
+      if (matches.length > 0) filtered.set(cat, matches)
+    }
+    return filtered
+  }, [categories, paramSearch])
 
   // Initialize expanded categories
   useMemo(() => {
@@ -1798,6 +1825,13 @@ function CorrelationTab({
               {allSelected ? 'Deselect all' : 'Select all'}
             </button>
             </div>
+            <input
+              type="text"
+              value={paramSearch}
+              onChange={(e) => setParamSearch(e.target.value)}
+              placeholder="Search parameters..."
+              className="mt-1.5 w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700 placeholder-gray-400 outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+            />
             <p className="text-[10px] text-gray-400 mt-0.5">
               {selected.length}/{MAX_CORR_PARAMS} max
               {selected.length >= MAX_CORR_PARAMS && <span className="text-amber-500 ml-1">— limit reached</span>}
@@ -1805,7 +1839,7 @@ function CorrelationTab({
           </div>
 
           <div className="max-h-[500px] overflow-y-auto divide-y divide-gray-50">
-            {Array.from(categories.entries()).map(([cat, catParams]) => {
+            {Array.from(filteredCategories.entries()).map(([cat, catParams]) => {
               const expanded = expandedCategories.has(cat)
               const catKeys = catParams.map((p) => p.key)
               const allCatSelected = catKeys.every((k) => selected.includes(k))
@@ -1935,6 +1969,349 @@ function CorrelationTab({
   )
 }
 
+// ---- Scatter / Regression Tab ----
+
+/** Color-by options for scatter (subset — no age_sex, no site_type for simplicity) */
+const SCATTER_COLOR_BY_OPTIONS = [
+  { value: 'default', label: 'Default' },
+  { value: 'age_group', label: 'Age Group' },
+  { value: 'sex', label: 'Sex' },
+  { value: 'site', label: 'Centre' },
+] as const
+type ScatterColorBy = (typeof SCATTER_COLOR_BY_OPTIONS)[number]['value']
+
+/** Get scatter point color based on color-by dimension */
+function getScatterPointColor(pt: ScatterPoint, colorByDim: ScatterColorBy): string {
+  if (colorByDim === 'age_group') {
+    return AGE_GROUP_COLORS[String(pt.age_group)] || COLORS.primary
+  }
+  if (colorByDim === 'sex') {
+    return pt.sex === 'A' ? SEX_COLORS.Male : SEX_COLORS.Female
+  }
+  if (colorByDim === 'site') {
+    const siteIdx = CENTRE_OPTIONS.findIndex((s) => s.value === pt.site_code)
+    return SITE_COLORS[(siteIdx >= 0 ? siteIdx : 0) % SITE_COLORS.length]
+  }
+  return COLORS.primary
+}
+
+/** Get category label for a scatter point */
+function getScatterCategory(pt: ScatterPoint, colorByDim: ScatterColorBy): string {
+  if (colorByDim === 'age_group') return AGE_GROUP_LABELS[String(pt.age_group)] || String(pt.age_group)
+  if (colorByDim === 'sex') return pt.sex === 'A' ? 'Male' : 'Female'
+  if (colorByDim === 'site') return pt.site_code || 'Unknown'
+  return 'All'
+}
+
+/** Simple linear regression from arrays */
+function computeLinearRegression(xs: number[], ys: number[]): { slope: number; intercept: number } | null {
+  const n = xs.length
+  if (n < 2) return null
+  const mx = xs.reduce((a, b) => a + b, 0) / n
+  const my = ys.reduce((a, b) => a + b, 0) / n
+  const sxy = xs.reduce((s, xi, i) => s + (xi - mx) * (ys[i] - my), 0)
+  const sxx = xs.reduce((s, xi) => s + (xi - mx) ** 2, 0)
+  if (sxx === 0) return null
+  const slope = sxy / sxx
+  return { slope, intercept: my - slope * mx }
+}
+
+/** Format p-value for display */
+function formatPValue(p: number | null): string {
+  if (p === null || p === undefined) return 'N/A'
+  if (p < 0.001) return '<0.001'
+  return p.toFixed(4)
+}
+
+function ScatterTab({
+  parameters,
+  filters,
+}: {
+  parameters: ParameterMeta[]
+  filters: DataExplorerFilters
+}) {
+  const [paramX, setParamX] = useState('')
+  const [paramY, setParamY] = useState('')
+  const [colorBy, setColorBy] = useState<ScatterColorBy>('default')
+  const [showRegression, setShowRegression] = useState(true)
+  const plotContainerRef = useRef<HTMLDivElement>(null)
+  const [showExport, setShowExport] = useState(false)
+
+  const paramXMeta = useMemo(() => parameters.find((p) => p.key === paramX), [parameters, paramX])
+  const paramYMeta = useMemo(() => parameters.find((p) => p.key === paramY), [parameters, paramY])
+
+  const { data, isLoading, isError } = useDataExplorerScatter(
+    paramX,
+    paramY,
+    filters,
+    !!paramX && !!paramY,
+  )
+
+  const plotData = useMemo(() => {
+    if (!data || data.points.length === 0) return []
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const traces: any[] = []
+
+    if (colorBy === 'default') {
+      // Single trace
+      traces.push({
+        type: 'scatter',
+        mode: 'markers',
+        x: data.points.map((p) => p.x),
+        y: data.points.map((p) => p.y),
+        marker: { color: COLORS.primary, size: 7, opacity: 0.6 },
+        hovertemplate: data.points.map(
+          (p) => `<b>${p.participant_code}</b><br>X: ${p.x}<br>Y: ${p.y}<extra></extra>`
+        ),
+        showlegend: false,
+      })
+
+      // Regression line for all points
+      if (showRegression && data.stats.regression.slope !== null && data.stats.regression.intercept !== null) {
+        const xVals = data.points.map((p) => p.x)
+        const xMin = Math.min(...xVals)
+        const xMax = Math.max(...xVals)
+        const slope = data.stats.regression.slope
+        const intercept = data.stats.regression.intercept
+        traces.push({
+          type: 'scatter',
+          mode: 'lines',
+          x: [xMin, xMax],
+          y: [slope * xMin + intercept, slope * xMax + intercept],
+          line: { color: COLORS.gray700, width: 2, dash: 'dash' },
+          showlegend: false,
+          hoverinfo: 'skip',
+        })
+      }
+    } else {
+      // Group by category
+      const groups = new Map<string, ScatterPoint[]>()
+      for (const pt of data.points) {
+        const cat = getScatterCategory(pt, colorBy)
+        const arr = groups.get(cat) ?? []
+        arr.push(pt)
+        groups.set(cat, arr)
+      }
+
+      for (const [cat, pts] of Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+        const color = getScatterPointColor(pts[0], colorBy)
+        traces.push({
+          type: 'scatter',
+          mode: 'markers',
+          name: cat,
+          x: pts.map((p) => p.x),
+          y: pts.map((p) => p.y),
+          marker: { color, size: 7, opacity: 0.6 },
+          hovertemplate: pts.map(
+            (p) => `<b>${p.participant_code}</b><br>X: ${p.x}<br>Y: ${p.y}<extra></extra>`
+          ),
+        })
+
+        // Per-group regression line
+        if (showRegression && pts.length >= 2) {
+          const reg = computeLinearRegression(pts.map((p) => p.x), pts.map((p) => p.y))
+          if (reg) {
+            const xMin = Math.min(...pts.map((p) => p.x))
+            const xMax = Math.max(...pts.map((p) => p.x))
+            traces.push({
+              type: 'scatter',
+              mode: 'lines',
+              x: [xMin, xMax],
+              y: [reg.slope * xMin + reg.intercept, reg.slope * xMax + reg.intercept],
+              line: { color, width: 2, dash: 'dash' },
+              showlegend: false,
+              hoverinfo: 'skip',
+            })
+          }
+        }
+      }
+    }
+
+    return traces
+  }, [data, colorBy, showRegression])
+
+  const layout = useMemo((): Record<string, unknown> => ({
+    ...PLOTLY_LAYOUT_DEFAULTS,
+    xaxis: {
+      ...PLOTLY_LAYOUT_DEFAULTS.xaxis,
+      title: {
+        text: paramXMeta ? `${paramXMeta.label}${paramXMeta.unit ? ` (${paramXMeta.unit})` : ''}` : paramX,
+        font: { size: 13, color: '#1E293B', family: '"Red Hat Display", sans-serif' },
+      },
+      tickfont: { size: 11, color: '#1E293B', family: '"Red Hat Display", sans-serif' },
+    },
+    yaxis: {
+      ...PLOTLY_LAYOUT_DEFAULTS.yaxis,
+      title: {
+        text: paramYMeta ? `${paramYMeta.label}${paramYMeta.unit ? ` (${paramYMeta.unit})` : ''}` : paramY,
+        font: { size: 13, color: '#1E293B', family: '"Red Hat Display", sans-serif' },
+      },
+      tickfont: { size: 11, color: '#1E293B', family: '"Red Hat Display", sans-serif' },
+    },
+    legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(255,255,255,0.8)', bordercolor: '#E2E8F0', borderwidth: 1 },
+    height: 500,
+  }), [paramX, paramY, paramXMeta, paramYMeta])
+
+  const plotConfig = useMemo(() => ({
+    displayModeBar: true,
+    displaylogo: false,
+    modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d'] as string[],
+    responsive: true,
+  }), [])
+
+  const stats = data?.stats
+
+  // No parameters selected prompt
+  if (!paramX || !paramY) {
+    return (
+      <div className="flex flex-col lg:flex-row gap-5">
+        {/* Left sidebar */}
+        <div className="w-full lg:w-64 flex-shrink-0 space-y-4">
+          <div className="rounded-xl bg-white border border-gray-100 p-4 space-y-4">
+            <div>
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">X Parameter</label>
+              <ParameterSelect parameters={parameters} value={paramX} onChange={setParamX} placeholder="Select X axis..." />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Y Parameter</label>
+              <ParameterSelect parameters={parameters} value={paramY} onChange={setParamY} placeholder="Select Y axis..." />
+            </div>
+          </div>
+        </div>
+        {/* Empty state */}
+        <div className="flex-1 min-w-0">
+          <ChartCard title="Scatter Plot" subtitle="Select X and Y parameters to plot">
+            <div className="flex h-64 items-center justify-center">
+              <div className="text-center">
+                <ScatterChart className="mx-auto h-10 w-10 text-gray-300 mb-3" />
+                <p className="text-sm text-gray-400">Select both X and Y parameters to generate a scatter plot</p>
+              </div>
+            </div>
+          </ChartCard>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col lg:flex-row gap-5">
+      {/* Left sidebar */}
+      <div className="w-full lg:w-64 flex-shrink-0 space-y-4">
+        <div className="rounded-xl bg-white border border-gray-100 p-4 space-y-4">
+          <div>
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">X Parameter</label>
+            <ParameterSelect parameters={parameters} value={paramX} onChange={setParamX} placeholder="Select X axis..." />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Y Parameter</label>
+            <ParameterSelect parameters={parameters} value={paramY} onChange={setParamY} placeholder="Select Y axis..." />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Color By</label>
+            <select
+              value={colorBy}
+              onChange={(e) => setColorBy(e.target.value as ScatterColorBy)}
+              className="w-full rounded-lg border border-gray-200 bg-white py-2 px-3 text-sm text-gray-700 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
+            >
+              {SCATTER_COLOR_BY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="show-regression"
+              checked={showRegression}
+              onChange={(e) => setShowRegression(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-gray-300 text-primary focus:ring-primary/20"
+            />
+            <label htmlFor="show-regression" className="text-xs text-gray-700">Show Regression Line</label>
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Regression Type</label>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+              Linear
+            </div>
+          </div>
+        </div>
+
+        {/* Export button */}
+        <button
+          onClick={() => setShowExport(true)}
+          className="w-full flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white py-2 px-3 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Export Chart
+        </button>
+      </div>
+
+      {/* Main content */}
+      <div className="flex-1 min-w-0 space-y-4">
+        <ChartCard
+          title="Scatter Plot"
+          subtitle={paramXMeta && paramYMeta ? `${paramXMeta.label} vs ${paramYMeta.label}` : ''}
+          loading={isLoading}
+          error={isError ? 'Failed to load scatter data' : undefined}
+          empty={!isLoading && !isError && data && data.points.length === 0}
+          emptyMessage="No paired data found for these parameters"
+        >
+          <div ref={plotContainerRef}>
+            {plotData.length > 0 && (
+              <Plot
+                data={plotData}
+                layout={layout}
+                config={plotConfig}
+                useResizeHandler
+                style={{ width: '100%', height: '500px' }}
+              />
+            )}
+          </div>
+        </ChartCard>
+
+        {/* Stats panel */}
+        {stats && stats.n > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+            {[
+              { label: 'N', value: stats.n.toLocaleString(), significant: false },
+              { label: 'Pearson r', value: stats.pearson_r !== null ? stats.pearson_r.toFixed(4) : 'N/A', significant: stats.pearson_p !== null && stats.pearson_p < 0.05 },
+              { label: 'Spearman r', value: stats.spearman_r !== null ? stats.spearman_r.toFixed(4) : 'N/A', significant: stats.spearman_p !== null && stats.spearman_p < 0.05 },
+              { label: 'R\u00B2', value: stats.r_squared !== null ? stats.r_squared.toFixed(4) : 'N/A', significant: false },
+              { label: 'p-value', value: formatPValue(stats.pearson_p), significant: stats.pearson_p !== null && stats.pearson_p < 0.05 },
+              { label: 'Slope', value: stats.regression.slope !== null ? stats.regression.slope.toFixed(4) : 'N/A', significant: false },
+              { label: 'Intercept', value: stats.regression.intercept !== null ? stats.regression.intercept.toFixed(4) : 'N/A', significant: false },
+            ].map((card) => (
+              <div
+                key={card.label}
+                className={cn(
+                  'rounded-lg border px-3 py-2.5 text-center',
+                  card.significant
+                    ? 'border-green-200 bg-green-50'
+                    : 'border-gray-100 bg-white',
+                )}
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-0.5">{card.label}</p>
+                <p className={cn(
+                  'text-sm font-bold tabular-nums',
+                  card.significant ? 'text-green-700' : 'text-gray-800',
+                )}>
+                  {card.value}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Export modal */}
+        {showExport && (
+          <ExportDialog plotRef={plotContainerRef} title="Scatter Plot" onClose={() => setShowExport(false)} />
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ---- Advanced Analytics Placeholder ----
 
 function AdvancedAnalyticsPlaceholder() {
@@ -2026,6 +2403,7 @@ export function DataExplorerPage() {
                   )}
                 >
                   {tab === 'Distribution' && <BarChart3 className="inline-block h-3.5 w-3.5 mr-1.5 opacity-70" />}
+                  {tab === 'Scatter' && <ScatterChart className="inline-block h-3.5 w-3.5 mr-1.5 opacity-70" />}
                   {tab === 'Correlation' && <Activity className="inline-block h-3.5 w-3.5 mr-1.5 opacity-70" />}
                   {tab === 'Advanced Analytics' && <Beaker className="inline-block h-3.5 w-3.5 mr-1.5 opacity-70" />}
                   {tab}
@@ -2058,6 +2436,9 @@ export function DataExplorerPage() {
             >
               {activeTab === 'Distribution' && (
                 <DistributionTab parameters={parameters ?? []} filters={filters} />
+              )}
+              {activeTab === 'Scatter' && (
+                <ScatterTab parameters={parameters ?? []} filters={filters} />
               )}
               {activeTab === 'Correlation' && (
                 <CorrelationTab parameters={parameters ?? []} filters={filters} />

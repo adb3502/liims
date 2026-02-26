@@ -99,6 +99,34 @@ export interface ClinicalSummaryResponse {
   }>
 }
 
+// ── Scatter types ──
+
+export interface ScatterPoint {
+  x: number
+  y: number
+  participant_code: string
+  age_group: number
+  sex: string
+  site_code: string | null
+}
+
+export interface ScatterStats {
+  n: number
+  pearson_r: number | null
+  pearson_p: number | null
+  spearman_r: number | null
+  spearman_p: number | null
+  r_squared: number | null
+  regression: { slope: number | null; intercept: number | null; p_value: number | null }
+}
+
+export interface ScatterResponse {
+  param_x: string
+  param_y: string
+  points: ScatterPoint[]
+  stats: ScatterStats
+}
+
 // ── Filter params ──
 
 export interface DataExplorerFilters {
@@ -125,6 +153,8 @@ export const dataExplorerKeys = {
     [...dataExplorerKeys.all, 'distribution', parameter, chartType, groupBy, filters] as const,
   correlation: (parameters: string[], method: string, filters: DataExplorerFilters) =>
     [...dataExplorerKeys.all, 'correlation', parameters.join(','), method, filters] as const,
+  scatter: (paramX: string, paramY: string, filters: DataExplorerFilters) =>
+    [...dataExplorerKeys.all, 'scatter', paramX, paramY, filters] as const,
   clinicalSummary: (filters: DataExplorerFilters) =>
     [...dataExplorerKeys.all, 'clinical-summary', filters] as const,
 }
@@ -288,6 +318,27 @@ export function useDataExplorerCorrelation(
       } as CorrelationResponse
     },
     enabled: enabled && parameters.length >= 2,
+    staleTime: 60_000,
+  })
+}
+
+export function useDataExplorerScatter(
+  paramX: string,
+  paramY: string,
+  filters: DataExplorerFilters,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: dataExplorerKeys.scatter(paramX, paramY, filters),
+    queryFn: async () => {
+      const params: Record<string, string> = { param_x: paramX, param_y: paramY }
+      if (filters.age_groups?.length) params.age_group = filters.age_groups.join(',')
+      if (filters.sex?.length) params.sex = filters.sex.join(',')
+      if (filters.site_ids?.length) params.site = filters.site_ids.join(',')
+      const res = await api.get<{ success: true; data: ScatterResponse }>('/data-explorer/scatter', { params })
+      return res.data.data
+    },
+    enabled: enabled && !!paramX && !!paramY,
     staleTime: 60_000,
   })
 }

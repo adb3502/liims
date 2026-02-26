@@ -175,6 +175,43 @@ def _safe_float(val) -> float | None:
         return None
 
 
+def _parse_cohort_filters(
+    age_group: str | None,
+    sex: str | None,
+    site: str | None,
+) -> tuple[list[AgeGroup] | None, list[Sex] | None, list[str] | None]:
+    """Parse cohort filter query params into typed filter lists.
+
+    Returns (age_group_enums, sex_enums, site_codes) — each None if not provided.
+    Raises HTTPException on invalid values.
+    """
+    age_group_enums: list[AgeGroup] | None = None
+    if age_group:
+        try:
+            raw_ints = [int(x.strip()) for x in age_group.split(",")]
+        except ValueError:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid age_group values.")
+        try:
+            age_group_enums = [AgeGroup(i) for i in raw_ints]
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Age group out of range (1-5): {exc}")
+
+    sex_map = {"A": Sex.MALE, "B": Sex.FEMALE, "M": Sex.MALE, "F": Sex.FEMALE}
+    sex_enums: list[Sex] | None = None
+    if sex:
+        raw_sex = [x.strip().upper() for x in sex.split(",")]
+        try:
+            sex_enums = [sex_map[s] for s in raw_sex]
+        except KeyError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Invalid sex value: {exc}. Use M/F or A/B.")
+
+    site_codes: list[str] | None = None
+    if site:
+        site_codes = [s.strip().upper() for s in site.split(",") if s.strip()]
+
+    return age_group_enums, sex_enums, site_codes
+
+
 def _rank_data(values: list[float]) -> list[float]:
     """Assign ranks to values, handling ties with average rank."""
     n = len(values)
@@ -415,38 +452,8 @@ async def get_distribution(
             f"Invalid group_by value. Must be one of: {', '.join(sorted(_VALID_GROUP_BY))}",
         )
 
-    # Parse filter values — convert ints to AgeGroup enum members to avoid .in_() crash
-    age_group_enums: list[AgeGroup] | None = None
-    if age_group:
-        try:
-            raw_ints = [int(x.strip()) for x in age_group.split(",")]
-        except ValueError:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid age_group values.")
-        try:
-            age_group_enums = [AgeGroup(i) for i in raw_ints]
-        except ValueError as exc:
-            raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
-                f"Age group out of range (1-5): {exc}",
-            )
-
-    # Normalize sex codes: accept A/B (participant convention) or M/F (enum value)
-    sex_map = {"A": Sex.MALE, "B": Sex.FEMALE, "M": Sex.MALE, "F": Sex.FEMALE}
+    age_group_enums, sex_enums, site_codes = _parse_cohort_filters(age_group, sex, site)
     sex_reverse = {"M": "A", "F": "B"}
-    sex_enums: list[Sex] | None = None
-    if sex:
-        raw_sex = [x.strip().upper() for x in sex.split(",")]
-        try:
-            sex_enums = [sex_map[s] for s in raw_sex]
-        except KeyError as exc:
-            raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
-                f"Invalid sex value: {exc}. Use M/F or A/B.",
-            )
-
-    site_codes: list[str] | None = None
-    if site:
-        site_codes = [s.strip().upper() for s in site.split(",") if s.strip()]
 
     is_clinical = parameter in CLINICAL_PARAM_MAP
     unit: str | None = None
@@ -581,13 +588,22 @@ async def get_correlation(
     current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
     parameters: str = Query(..., description="Comma-separated parameter names"),
     method: str = Query("spearman", pattern="^(pearson|spearman)$"),
+    age_group: str | None = Query(None, description="Comma-separated age groups (1-5)"),
+    sex: str | None = Query(None, description="Comma-separated sex codes (M,F or A,B)"),
+    site: str | None = Query(None, description="Comma-separated collection site codes"),
 ):
-    """Return correlation matrix between selected parameters."""
+    """Return correlation matrix between selected parameters.
+
+    Supports cohort filtering by age_group, sex, and site — only participants
+    matching all active filters are included in the correlation computation.
+    """
     param_names = [p.strip() for p in parameters.split(",") if p.strip()]
     if len(param_names) < 2:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "At least 2 parameters required.")
     if len(param_names) > 100:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Maximum 100 parameters allowed.")
+
+    age_group_enums, sex_enums, site_codes = _parse_cohort_filters(age_group, sex, site)
 
     # Collect data per participant for each parameter
     # participant_code -> {param_name: value}
@@ -606,12 +622,20 @@ async def get_correlation(
                     Participant.participant_code,
                     json_expr.as_string().label("value_str"),
                 )
+                .join(CollectionSite, Participant.collection_site_id == CollectionSite.id)
                 .where(
                     Participant.is_deleted == False,  # noqa: E712
                     Participant.clinical_data.isnot(None),
                     json_expr.isnot(None),
                 )
             )
+            if age_group_enums:
+                query = query.where(Participant.age_group.in_(age_group_enums))
+            if sex_enums:
+                query = query.where(Participant.sex.in_(sex_enums))
+            if site_codes:
+                query = query.where(CollectionSite.code.in_(site_codes))
+
             result = await db.execute(query)
             for row in result.all():
                 val = _safe_float(row.value_str)
@@ -635,12 +659,20 @@ async def get_correlation(
                     PartnerLabResult.test_value,
                 )
                 .join(Participant, PartnerLabResult.participant_id == Participant.id)
+                .join(CollectionSite, Participant.collection_site_id == CollectionSite.id)
                 .where(
                     PartnerLabResult.canonical_test_id == ct_id,
                     PartnerLabResult.test_value.isnot(None),
                     Participant.is_deleted == False,  # noqa: E712
                 )
             )
+            if age_group_enums:
+                query = query.where(Participant.age_group.in_(age_group_enums))
+            if sex_enums:
+                query = query.where(Participant.sex.in_(sex_enums))
+            if site_codes:
+                query = query.where(CollectionSite.code.in_(site_codes))
+
             result = await db.execute(query)
             for row in result.all():
                 val = _safe_float(row.test_value)
@@ -705,6 +737,184 @@ async def get_correlation(
                 "Raw p-values are not corrected for multiple comparisons. "
                 "p_values_adjusted uses Benjamini-Hochberg FDR correction."
             ),
+        },
+    }
+
+
+@router.get("/scatter", response_model=dict)
+async def get_scatter(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
+    param_x: str = Query(..., min_length=1, description="X-axis parameter name"),
+    param_y: str = Query(..., min_length=1, description="Y-axis parameter name"),
+    age_group: str | None = Query(None, description="Comma-separated age groups (1-5)"),
+    sex: str | None = Query(None, description="Comma-separated sex codes (M,F or A,B)"),
+    site: str | None = Query(None, description="Comma-separated collection site codes"),
+):
+    """Return paired (x, y) data points for scatter plot and regression analysis.
+
+    For each participant that has both param_x and param_y values, returns the
+    raw data point plus correlation statistics and linear regression coefficients.
+    No scipy dependency — all stats computed in pure Python.
+    """
+    age_group_enums, sex_enums, site_codes = _parse_cohort_filters(age_group, sex, site)
+    sex_reverse = {"M": "A", "F": "B"}
+
+    # Collect per-participant data for both parameters
+    # participant_code -> {param: value, age_group, sex, site_code}
+    participant_meta: dict[str, dict] = {}  # code -> {age_group, sex, site_code}
+    participant_values: dict[str, dict[str, float]] = {}  # code -> {param_name: value}
+
+    for param in [param_x, param_y]:
+        if param in CLINICAL_PARAM_MAP:
+            cp = CLINICAL_PARAM_MAP[param]
+            path = cp["path"]
+            json_expr = Participant.clinical_data
+            for key in path:
+                json_expr = json_expr[key]
+
+            query = (
+                select(
+                    Participant.participant_code,
+                    json_expr.as_string().label("value_str"),
+                    Participant.age_group,
+                    Participant.sex,
+                    CollectionSite.code.label("site_code"),
+                )
+                .join(CollectionSite, Participant.collection_site_id == CollectionSite.id)
+                .where(
+                    Participant.is_deleted == False,  # noqa: E712
+                    Participant.clinical_data.isnot(None),
+                    json_expr.isnot(None),
+                )
+            )
+            if age_group_enums:
+                query = query.where(Participant.age_group.in_(age_group_enums))
+            if sex_enums:
+                query = query.where(Participant.sex.in_(sex_enums))
+            if site_codes:
+                query = query.where(CollectionSite.code.in_(site_codes))
+
+            result = await db.execute(query)
+            for row in result.all():
+                val = _safe_float(row.value_str)
+                if val is not None:
+                    pcode = row.participant_code
+                    participant_values.setdefault(pcode, {})[param] = val
+                    if pcode not in participant_meta:
+                        raw_sex = row.sex.value if hasattr(row.sex, "value") else row.sex
+                        participant_meta[pcode] = {
+                            "age_group": row.age_group.value if hasattr(row.age_group, "value") else int(row.age_group),
+                            "sex": sex_reverse.get(raw_sex, raw_sex),
+                            "site_code": row.site_code,
+                        }
+        else:
+            # Lab parameter
+            ct_result = await db.execute(
+                select(CanonicalTest.id).where(
+                    CanonicalTest.canonical_name == param,
+                    CanonicalTest.is_active == True,  # noqa: E712
+                )
+            )
+            ct_id = ct_result.scalar_one_or_none()
+            if ct_id is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, f"Parameter '{param}' not found.")
+
+            query = (
+                select(
+                    Participant.participant_code,
+                    PartnerLabResult.test_value,
+                    Participant.age_group,
+                    Participant.sex,
+                    CollectionSite.code.label("site_code"),
+                )
+                .join(Participant, PartnerLabResult.participant_id == Participant.id)
+                .join(CollectionSite, Participant.collection_site_id == CollectionSite.id)
+                .where(
+                    PartnerLabResult.canonical_test_id == ct_id,
+                    PartnerLabResult.test_value.isnot(None),
+                    Participant.is_deleted == False,  # noqa: E712
+                )
+            )
+            if age_group_enums:
+                query = query.where(Participant.age_group.in_(age_group_enums))
+            if sex_enums:
+                query = query.where(Participant.sex.in_(sex_enums))
+            if site_codes:
+                query = query.where(CollectionSite.code.in_(site_codes))
+
+            result = await db.execute(query)
+            for row in result.all():
+                val = _safe_float(row.test_value)
+                if val is not None:
+                    pcode = row.participant_code
+                    participant_values.setdefault(pcode, {})[param] = val
+                    if pcode not in participant_meta:
+                        raw_sex = row.sex.value if hasattr(row.sex, "value") else row.sex
+                        participant_meta[pcode] = {
+                            "age_group": row.age_group.value if hasattr(row.age_group, "value") else int(row.age_group),
+                            "sex": sex_reverse.get(raw_sex, raw_sex),
+                            "site_code": row.site_code,
+                        }
+
+    # Build paired points — only participants with BOTH values
+    points = []
+    xs: list[float] = []
+    ys: list[float] = []
+    for pcode, vals in participant_values.items():
+        if param_x in vals and param_y in vals:
+            meta = participant_meta.get(pcode, {})
+            points.append({
+                "x": round(vals[param_x], 6),
+                "y": round(vals[param_y], 6),
+                "participant_code": pcode,
+                "age_group": meta.get("age_group", 0),
+                "sex": meta.get("sex", ""),
+                "site_code": meta.get("site_code"),
+            })
+            xs.append(vals[param_x])
+            ys.append(vals[param_y])
+
+    n = len(xs)
+
+    # Compute statistics
+    pearson_r, pearson_p = _pearson_corr(xs, ys)
+    spearman_r, spearman_p = _spearman_corr(xs, ys)
+
+    r_squared = round(pearson_r ** 2, 6) if pearson_r is not None else None
+
+    # Linear regression: slope = Sxy / Sxx, intercept = mean_y - slope * mean_x
+    slope = None
+    intercept = None
+    reg_p = pearson_p  # same as Pearson p-value for simple linear regression
+    if n >= 3:
+        mx = sum(xs) / n
+        my = sum(ys) / n
+        sxy = sum((xi - mx) * (yi - my) for xi, yi in zip(xs, ys))
+        sxx = sum((xi - mx) ** 2 for xi in xs)
+        if sxx > 0:
+            slope = round(sxy / sxx, 6)
+            intercept = round(my - slope * mx, 6)
+
+    return {
+        "success": True,
+        "data": {
+            "param_x": param_x,
+            "param_y": param_y,
+            "points": points,
+            "stats": {
+                "n": n,
+                "pearson_r": pearson_r,
+                "pearson_p": pearson_p,
+                "spearman_r": spearman_r,
+                "spearman_p": spearman_p,
+                "r_squared": r_squared,
+                "regression": {
+                    "slope": slope,
+                    "intercept": intercept,
+                    "p_value": reg_p,
+                },
+            },
         },
     }
 
