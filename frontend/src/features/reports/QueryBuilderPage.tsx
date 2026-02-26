@@ -144,7 +144,10 @@ export function QueryBuilderPage() {
   }
 
   const result = executeQuery.data
-  const totalPages = result ? Math.ceil(result.total / result.per_page) : 0
+  // Prefer server-computed total_pages; fall back to client calculation for backward compat
+  const totalPages = result
+    ? (result.total_pages ?? Math.ceil(result.total / result.per_page))
+    : 0
 
   if (entitiesLoading) return <PageSpinner />
 

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import (
     IccStatus,
+    OmicsResultType,
     QCStatus,
     RunStatus,
     SampleStatus,
@@ -16,7 +17,7 @@ from app.models.field_ops import FieldEvent, FieldEventParticipant
 from app.models.instrument import InstrumentRun
 from app.models.omics import IccProcessing, OmicsResult, OmicsResultSet
 from app.models.participant import CollectionSite, Participant
-from app.models.partner import PartnerLabImport, PartnerLabResult
+from app.models.partner import CanonicalTest, PartnerLabImport, PartnerLabResult
 from app.models.sample import Sample
 from app.models.storage import Freezer, StorageBox, StoragePosition, StorageRack
 
@@ -29,12 +30,24 @@ class DashboardService:
 
     # ── Enrollment Summary ────────────────────────────────────────────
 
-    async def enrollment_summary(self) -> dict:
-        """Total participants, by site, by wave, enrollment rate over time."""
+    async def enrollment_summary(self, site_code: str | None = None) -> dict:
+        """Total participants, by site, by wave, enrollment rate over time.
+
+        When site_code is provided, all stats are filtered to that single site.
+        """
+        # Resolve site filter if provided
+        site_filter = []
+        if site_code:
+            site_row = (await self.db.execute(
+                select(CollectionSite.id).where(CollectionSite.code == site_code)
+            )).scalar_one_or_none()
+            if site_row:
+                site_filter = [Participant.collection_site_id == site_row]
+
+        base_where = [Participant.is_deleted == False, *site_filter]  # noqa: E712
+
         # Total participants
-        total_q = select(func.count()).where(
-            Participant.is_deleted == False  # noqa: E712
-        )
+        total_q = select(func.count()).where(*base_where)
         total = (await self.db.execute(total_q)).scalar_one()
 
         # By collection site
@@ -45,7 +58,7 @@ class DashboardService:
                 func.count(Participant.id).label("count"),
             )
             .join(Participant, Participant.collection_site_id == CollectionSite.id)
-            .where(Participant.is_deleted == False)  # noqa: E712
+            .where(Participant.is_deleted == False, *site_filter)  # noqa: E712
             .group_by(CollectionSite.name, CollectionSite.code)
             .order_by(func.count(Participant.id).desc())
         )
@@ -61,15 +74,15 @@ class DashboardService:
                 Participant.wave,
                 func.count(Participant.id).label("count"),
             )
-            .where(Participant.is_deleted == False)  # noqa: E712
+            .where(*base_where)
             .group_by(Participant.wave)
             .order_by(Participant.wave.asc())
         )
         by_wave_rows = (await self.db.execute(by_wave_q)).all()
         by_wave = [{"wave": r[0], "count": r[1]} for r in by_wave_rows]
 
-        # Enrollment rate over last 30 days (by date)
-        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+        # Enrollment rate this month (resets on 1st)
+        first_of_month = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         day_expr = func.date_trunc("day", Participant.enrollment_date)
         rate_q = (
             select(
@@ -77,8 +90,8 @@ class DashboardService:
                 func.count(Participant.id).label("count"),
             )
             .where(
-                Participant.is_deleted == False,  # noqa: E712
-                Participant.enrollment_date >= thirty_days_ago,
+                *base_where,
+                Participant.enrollment_date >= first_of_month,
             )
             .group_by(day_expr)
             .order_by(day_expr.asc())
@@ -89,11 +102,184 @@ class DashboardService:
             for r in rate_rows
         ]
 
+        # Demographics: by age group
+        by_age_q = (
+            select(
+                Participant.age_group,
+                func.count(Participant.id).label("count"),
+            )
+            .where(*base_where)
+            .group_by(Participant.age_group)
+            .order_by(Participant.age_group.asc())
+        )
+        by_age_rows = (await self.db.execute(by_age_q)).all()
+        by_age_group = [
+            {"age_group": str(r[0].value if hasattr(r[0], 'value') else r[0]), "count": r[1]}
+            for r in by_age_rows
+        ]
+
+        # Demographics: by sex
+        by_sex_q = (
+            select(
+                Participant.sex,
+                func.count(Participant.id).label("count"),
+            )
+            .where(*base_where)
+            .group_by(Participant.sex)
+        )
+        by_sex_rows = (await self.db.execute(by_sex_q)).all()
+        by_sex = [
+            {"sex": str(r[0].value if hasattr(r[0], 'value') else r[0]), "count": r[1]}
+            for r in by_sex_rows
+        ]
+
+        # Demographics: by age group × sex cross-tab
+        by_age_sex_q = (
+            select(
+                Participant.age_group,
+                Participant.sex,
+                func.count(Participant.id).label("count"),
+            )
+            .where(*base_where)
+            .group_by(Participant.age_group, Participant.sex)
+            .order_by(Participant.age_group.asc(), Participant.sex.asc())
+        )
+        by_age_sex_rows = (await self.db.execute(by_age_sex_q)).all()
+        by_age_sex = [
+            {
+                "age_group": str(r[0].value if hasattr(r[0], 'value') else r[0]),
+                "sex": str(r[1].value if hasattr(r[1], 'value') else r[1]),
+                "count": r[2],
+            }
+            for r in by_age_sex_rows
+        ]
+
+        # This month count
+        recent_month_q = select(func.count()).where(
+            *base_where,
+            Participant.enrollment_date >= first_of_month,
+        )
+        recent_30d = (await self.db.execute(recent_month_q)).scalar_one()
+
+        # Enrollment over ALL time (monthly)
+        month_expr = func.date_trunc("month", Participant.enrollment_date)
+        all_time_q = (
+            select(
+                month_expr.label("month"),
+                func.count(Participant.id).label("count"),
+            )
+            .where(*base_where)
+            .group_by(month_expr)
+            .order_by(month_expr.asc())
+        )
+        all_time_rows = (await self.db.execute(all_time_q)).all()
+        enrollment_over_time = [
+            {"date": r[0].isoformat() if r[0] else None, "count": r[1]}
+            for r in all_time_rows
+        ]
+
+        # Per-site monthly enrollment breakdown (skip for single-site view)
+        enrollment_by_site_month = []
+        if not site_code:
+            per_site_month_q = (
+                select(
+                    month_expr.label("month"),
+                    CollectionSite.code.label("site_code"),
+                    func.count(Participant.id).label("count"),
+                )
+                .join(CollectionSite, Participant.collection_site_id == CollectionSite.id)
+                .where(Participant.is_deleted == False)  # noqa: E712
+                .group_by(month_expr, CollectionSite.code)
+                .order_by(month_expr.asc(), CollectionSite.code)
+            )
+            per_site_month_rows = (await self.db.execute(per_site_month_q)).all()
+            enrollment_by_site_month = [
+                {"date": r[0].isoformat() if r[0] else None, "site_code": r[1], "count": r[2]}
+                for r in per_site_month_rows
+            ]
+
+        # Urban vs Rural: derive from site code
+        urban_sites = {"BBH", "RMH", "CHAF", "BMC", "JSS"}
+        rural_sites = {"SSSSMH"}
+        urban_count = sum(s["count"] for s in by_site if s["site_code"] in urban_sites)
+        rural_count = sum(s["count"] for s in by_site if s["site_code"] in rural_sites)
+
+        # HbA1c classification from lab results
+        hba1c_where = [
+            CanonicalTest.canonical_name == "hba1c",
+            Participant.is_deleted == False,  # noqa: E712
+            PartnerLabResult.test_value.isnot(None),
+        ]
+        if site_filter:
+            hba1c_where.extend(site_filter)
+        hba1c_q = await self.db.execute(select(
+            PartnerLabResult.test_value,
+            Participant.id,
+        ).join(
+            Participant, PartnerLabResult.participant_id == Participant.id
+        ).join(
+            CanonicalTest, PartnerLabResult.canonical_test_id == CanonicalTest.id
+        ).where(*hba1c_where))
+        hba1c_normal = 0
+        hba1c_prediabetic = 0
+        hba1c_diabetic = 0
+        hba1c_values = []
+        seen_participants = set()
+        for row in hba1c_q.all():
+            try:
+                val = float(row[0])
+                pid = row[1]
+                if pid in seen_participants:
+                    continue
+                seen_participants.add(pid)
+                hba1c_values.append(val)
+                if val < 5.7:
+                    hba1c_normal += 1
+                elif val < 6.5:
+                    hba1c_prediabetic += 1
+                else:
+                    hba1c_diabetic += 1
+            except (ValueError, TypeError):
+                pass
+
+        # Continuous age distribution from clinical_data
+        age_values = []
+        age_q = await self.db.execute(
+            select(Participant.clinical_data["demographics"]["age"].as_string())
+            .where(
+                *base_where,
+                Participant.clinical_data.isnot(None),
+            )
+        )
+        for row in age_q.scalars().all():
+            try:
+                age = float(row)
+                if 0 < age < 120:
+                    age_values.append(age)
+            except (ValueError, TypeError):
+                pass
+
         return {
             "total_participants": total,
             "by_site": by_site,
             "by_wave": by_wave,
             "enrollment_rate_30d": enrollment_rate,
+            "enrollment_over_time": enrollment_over_time,
+            "enrollment_by_site_month": enrollment_by_site_month,
+            "recent_30d": recent_30d,
+            "demographics": {
+                "by_age_group": by_age_group,
+                "by_sex": by_sex,
+                "by_age_sex": by_age_sex,
+                "urban_rural": {"urban": urban_count, "rural": rural_count},
+                "hba1c_status": {
+                    "normal": hba1c_normal,
+                    "prediabetic": hba1c_prediabetic,
+                    "diabetic": hba1c_diabetic,
+                },
+                "age_distribution": age_values,
+                "hba1c_distribution": hba1c_values,
+            },
         }
 
     # ── Sample Inventory ──────────────────────────────────────────────
@@ -340,8 +526,14 @@ class DashboardService:
     # ── Quality Metrics ───────────────────────────────────────────────
 
     async def quality_summary(self) -> dict:
-        """QC pass/fail rates, ICC completion rates, omics coverage."""
-        # QC pass/fail on instrument runs
+        """QC pass/fail rates, ICC completion rates, omics coverage.
+
+        Shape matches frontend QualityDashboard interface:
+          qc_pass_fail: {passed, failed, pending}
+          icc_completion: [{status, count}, ...]
+          omics_coverage: {total_participants, proteomics_count, metabolomics_count}
+        """
+        # QC pass/fail/pending on instrument runs
         qc_q = (
             select(
                 InstrumentRun.qc_status,
@@ -357,72 +549,65 @@ class DashboardService:
         qc_by_status = {
             r[0].value if r[0] else "unknown": r[1] for r in qc_rows
         }
-        qc_total = sum(qc_by_status.values())
-        qc_passed = qc_by_status.get(QCStatus.PASSED.value, 0)
+        qc_pass_fail = {
+            "passed": qc_by_status.get(QCStatus.PASSED.value, 0),
+            "failed": qc_by_status.get(QCStatus.FAILED.value, 0),
+            "pending": qc_by_status.get(QCStatus.PENDING.value, 0),
+        }
 
-        # ICC completion rate
-        icc_total_q = select(func.count(IccProcessing.id))
-        icc_total = (await self.db.execute(icc_total_q)).scalar_one()
-
-        icc_complete_q = select(func.count()).where(
-            IccProcessing.status == IccStatus.ANALYSIS_COMPLETE
-        )
-        icc_complete = (await self.db.execute(icc_complete_q)).scalar_one()
-
-        # Omics coverage: unique samples with omics results
-        omics_samples_q = select(
-            func.count(func.distinct(OmicsResult.sample_id))
-        )
-        omics_samples = (await self.db.execute(omics_samples_q)).scalar_one()
-
-        total_samples_q = select(func.count()).where(
-            Sample.is_deleted == False  # noqa: E712
-        )
-        total_samples = (await self.db.execute(total_samples_q)).scalar_one()
-
-        # Omics result sets by type
-        omics_by_type_q = (
+        # ICC completion — GROUP BY status for per-status array
+        icc_by_status_q = (
             select(
-                OmicsResultSet.result_type,
-                func.count(OmicsResultSet.id).label("count"),
+                IccProcessing.status,
+                func.count(IccProcessing.id).label("count"),
             )
-            .group_by(OmicsResultSet.result_type)
+            .group_by(IccProcessing.status)
+            .order_by(IccProcessing.status)
         )
-        omics_type_rows = (await self.db.execute(omics_by_type_q)).all()
-        omics_by_type = [
-            {"result_type": r[0].value if r[0] else None, "count": r[1]}
-            for r in omics_type_rows
+        icc_rows = (await self.db.execute(icc_by_status_q)).all()
+        icc_completion = [
+            {"status": r[0].value if r[0] else "unknown", "count": r[1]}
+            for r in icc_rows
         ]
 
-        # Sample deviation rate
-        deviation_q = select(func.count()).where(
-            Sample.is_deleted == False,  # noqa: E712
-            Sample.has_deviation == True,  # noqa: E712
+        # Omics coverage: unique participants with proteomics / metabolomics
+        # Count distinct participants via sample → omics_result join
+        total_participants_q = select(func.count()).where(
+            Participant.is_deleted == False  # noqa: E712
         )
-        deviations = (await self.db.execute(deviation_q)).scalar_one()
+        total_participants = (await self.db.execute(total_participants_q)).scalar_one()
+
+        proteomics_q = (
+            select(func.count(func.distinct(Participant.id)))
+            .join(Sample, Sample.participant_id == Participant.id)
+            .join(OmicsResult, OmicsResult.sample_id == Sample.id)
+            .join(OmicsResultSet, OmicsResultSet.id == OmicsResult.result_set_id)
+            .where(
+                Participant.is_deleted == False,  # noqa: E712
+                OmicsResultSet.result_type == OmicsResultType.PROTEOMICS,
+            )
+        )
+        proteomics_count = (await self.db.execute(proteomics_q)).scalar_one()
+
+        metabolomics_q = (
+            select(func.count(func.distinct(Participant.id)))
+            .join(Sample, Sample.participant_id == Participant.id)
+            .join(OmicsResult, OmicsResult.sample_id == Sample.id)
+            .join(OmicsResultSet, OmicsResultSet.id == OmicsResult.result_set_id)
+            .where(
+                Participant.is_deleted == False,  # noqa: E712
+                OmicsResultSet.result_type == OmicsResultType.METABOLOMICS,
+            )
+        )
+        metabolomics_count = (await self.db.execute(metabolomics_q)).scalar_one()
 
         return {
-            "qc": {
-                "total_reviewed": qc_total,
-                "passed": qc_passed,
-                "pass_rate_pct": round(qc_passed / qc_total * 100, 1) if qc_total > 0 else 0,
-                "by_status": qc_by_status,
-            },
-            "icc": {
-                "total_processing": icc_total,
-                "analysis_complete": icc_complete,
-                "completion_rate_pct": round(icc_complete / icc_total * 100, 1) if icc_total > 0 else 0,
-            },
+            "qc_pass_fail": qc_pass_fail,
+            "icc_completion": icc_completion,
             "omics_coverage": {
-                "samples_with_results": omics_samples,
-                "total_samples": total_samples,
-                "coverage_pct": round(omics_samples / total_samples * 100, 1) if total_samples > 0 else 0,
-                "by_type": omics_by_type,
-            },
-            "deviations": {
-                "total_samples": total_samples,
-                "with_deviations": deviations,
-                "deviation_rate_pct": round(deviations / total_samples * 100, 1) if total_samples > 0 else 0,
+                "total_participants": total_participants,
+                "proteomics_count": proteomics_count,
+                "metabolomics_count": metabolomics_count,
             },
         }
 
@@ -484,10 +669,10 @@ class DashboardService:
         )
         participants = (await self.db.execute(participants_q)).scalar_one()
 
-        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+        first_of_month = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         recent_enrollment_q = select(func.count()).where(
             Participant.is_deleted == False,  # noqa: E712
-            Participant.enrollment_date >= thirty_days_ago,
+            Participant.enrollment_date >= first_of_month,
         )
         recent_30d = (await self.db.execute(recent_enrollment_q)).scalar_one()
 
@@ -588,5 +773,111 @@ class DashboardService:
             },
             "quality": {
                 "qc_pass_rate": qc_pass_rate,
+            },
+        }
+
+    # ── Enrollment Matrix ─────────────────────────────────────────────
+
+    # Per-site targets: target count PER GROUP CODE (per category).
+    # Baptist has 200 slots per group code, others have 100 per group code.
+    _SITE_TARGETS: dict[str, int] = {
+        "RMH": 100,     # 100 per category (e.g., 100 males aged 18-29)
+        "SSSSMH": 100,  # 100 per category
+        "BBH": 200,     # 200 per category (largest site)
+        "CHAF": 100,    # 100 per category
+        "BMC": 0,       # not active yet
+        "JSS": 0,       # not active yet
+    }
+    _GROUP_CODES = [
+        "1A", "1B", "2A", "2B", "3A", "3B", "4A", "4B", "5A", "5B",
+    ]
+
+    async def enrollment_matrix(self) -> dict:
+        """Enrollment counts grouped by collection site × group_code.
+
+        Returns:
+          sites: [{code, name}]
+          group_codes: ["1A","1B",...,"5A","5B"]
+          matrix: {site_code: {group_code: {count, target}}}
+          totals: {by_site: {site_code: int}, by_group: {group_code: int}}
+        """
+        # Fetch all active sites
+        sites_q = (
+            select(CollectionSite.code, CollectionSite.name)
+            .order_by(CollectionSite.code.asc())
+        )
+        site_rows = (await self.db.execute(sites_q)).all()
+        sites = [{"code": r[0], "name": r[1]} for r in site_rows]
+
+        # Enrollment counts: GROUP BY site_code, group_code
+        counts_q = (
+            select(
+                CollectionSite.code.label("site_code"),
+                Participant.group_code,
+                func.count(Participant.id).label("count"),
+            )
+            .join(CollectionSite, Participant.collection_site_id == CollectionSite.id)
+            .where(Participant.is_deleted == False)  # noqa: E712
+            .group_by(CollectionSite.code, Participant.group_code)
+        )
+        count_rows = (await self.db.execute(counts_q)).all()
+
+        # Build matrix with zeros as defaults
+        matrix: dict[str, dict[str, dict]] = {}
+        for site in sites:
+            site_code = site["code"]
+            target_per_cell = self._SITE_TARGETS.get(site_code, 0)
+            matrix[site_code] = {
+                gc: {"count": 0, "target": target_per_cell}
+                for gc in self._GROUP_CODES
+            }
+
+        for row in count_rows:
+            site_code = row.site_code
+            gc = row.group_code
+            if site_code not in matrix:
+                # Unexpected site: initialise on the fly
+                matrix[site_code] = {
+                    gc2: {"count": 0, "target": 0} for gc2 in self._GROUP_CODES
+                }
+            if gc in matrix[site_code]:
+                matrix[site_code][gc]["count"] = row.count
+            else:
+                matrix[site_code][gc] = {"count": row.count, "target": self._SITE_TARGETS.get(site_code, 0)}
+
+        # Fill in targets for cells with zero count (so every cell has a target)
+        for site_code in matrix:
+            target = self._SITE_TARGETS.get(site_code, 0)
+            for gc in self._GROUP_CODES:
+                if gc not in matrix[site_code]:
+                    matrix[site_code][gc] = {"count": 0, "target": target}
+                elif matrix[site_code][gc]["target"] == 0:
+                    matrix[site_code][gc]["target"] = target
+
+        # Compute totals as {count, target} objects (not plain ints)
+        by_site: dict[str, dict] = {}
+        for s in sites:
+            sc = s["code"]
+            site_count = sum(cell["count"] for cell in matrix.get(sc, {}).values())
+            site_target = self._SITE_TARGETS.get(sc, 0) * len(self._GROUP_CODES)
+            by_site[sc] = {"count": site_count, "target": site_target}
+
+        by_group: dict[str, dict] = {}
+        for gc in self._GROUP_CODES:
+            gc_count = sum(matrix.get(sc, {}).get(gc, {}).get("count", 0) for sc in [s["code"] for s in sites])
+            gc_target = sum(self._SITE_TARGETS.get(sc, 0) for sc in [s["code"] for s in sites])
+            by_group[gc] = {"count": gc_count, "target": gc_target}
+
+        grand_count = sum(v["count"] for v in by_site.values())
+        grand_target = sum(v["target"] for v in by_site.values())
+
+        return {
+            "sites": sites,
+            "group_codes": self._GROUP_CODES,
+            "matrix": matrix,
+            "totals": {
+                "by_site": by_site,
+                "by_group": by_group,
+                "grand": {"count": grand_count, "target": grand_target},
             },
         }

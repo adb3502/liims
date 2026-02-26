@@ -22,17 +22,17 @@ export function Layout() {
   }, [])
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-[#F8FAFC]">
       {/* Mobile overlay */}
       {mobileMenuOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden transition-opacity"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
 
       {/* Sidebar - desktop */}
-      <div className="hidden lg:block">
+      <div className="hidden lg:block flex-shrink-0">
         <Sidebar
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -42,7 +42,7 @@ export function Layout() {
       {/* Sidebar - mobile */}
       <div
         className={cn(
-          'fixed inset-y-0 left-0 z-50 lg:hidden transition-transform duration-200',
+          'fixed inset-y-0 left-0 z-50 lg:hidden transition-transform duration-300 ease-in-out',
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
@@ -50,12 +50,12 @@ export function Layout() {
       </div>
 
       {/* Main content */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         <Header onMobileMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
         <OfflineBanner />
         <main className="flex-1 overflow-y-auto">
-          <div className="p-4 lg:p-6">
-            <div className="mb-4">
+          <div className="px-4 py-4 lg:px-6 lg:py-5 max-w-[1600px] mx-auto">
+            <div className="mb-3">
               <Breadcrumbs />
             </div>
             <Outlet />

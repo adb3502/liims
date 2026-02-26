@@ -23,6 +23,37 @@ _query_rate_limit = RateLimiter(max_calls=20, window_seconds=60, key="query_buil
 # Pre-build the static entity list for the /entities endpoint
 _STATIC_ENTITY_LIST: list[dict] | None = None
 
+# Operators grouped by simple type
+_TYPE_OPERATORS: dict[str, list[str]] = {
+    "string": ["eq", "ne", "contains", "starts_with", "is_null"],
+    "number": ["eq", "ne", "gt", "gte", "lt", "lte", "is_null"],
+    "date": ["eq", "gt", "lt", "gte", "lte", "between", "is_null"],
+    "boolean": ["eq", "is_null"],
+    "uuid": ["eq", "ne", "is_null"],
+    "unknown": ["eq", "ne", "is_null"],
+}
+
+
+def _map_sa_type(raw_type: str) -> str:
+    """Map SQLAlchemy type string to a simple frontend-friendly type name."""
+    t = raw_type.upper()
+    if any(s in t for s in ("VARCHAR", "TEXT", "CHAR", "STRING", "ENUM")):
+        return "string"
+    if any(s in t for s in ("INTEGER", "BIGINT", "SMALLINT", "NUMERIC", "FLOAT", "REAL", "DOUBLE", "DECIMAL")):
+        return "number"
+    if "BOOL" in t:
+        return "boolean"
+    if "DATE" in t or "TIMESTAMP" in t or "DATETIME" in t:
+        return "date"
+    if "UUID" in t:
+        return "uuid"
+    return "unknown"
+
+
+def _col_label(col_name: str) -> str:
+    """Convert snake_case column name to a human-readable label."""
+    return col_name.replace("_", " ").title()
+
 
 def _get_entity_list() -> list[dict]:
     global _STATIC_ENTITY_LIST
@@ -36,12 +67,18 @@ def _get_entity_list() -> list[dict]:
                 col_attr = getattr(model, col_name, None)
                 if col_attr is not None and hasattr(col_attr, "type"):
                     try:
-                        col_type = str(col_attr.type)
+                        raw_type = str(col_attr.type)
                     except Exception:
-                        col_type = "unknown"
+                        raw_type = "unknown"
                 else:
-                    col_type = "unknown"
-                fields.append({"name": col_name, "type": col_type})
+                    raw_type = "unknown"
+                simple_type = _map_sa_type(raw_type)
+                fields.append({
+                    "name": col_name,
+                    "label": _col_label(col_name),
+                    "type": simple_type,
+                    "operators": _TYPE_OPERATORS.get(simple_type, _TYPE_OPERATORS["unknown"]),
+                })
             entities.append({
                 "entity": name,
                 "fields": fields,
@@ -81,7 +118,7 @@ async def execute_query(
     svc = QueryBuilderService(db)
 
     try:
-        rows, total = await svc.execute_query(
+        rows, total, select_cols = await svc.execute_query(
             entity=data.entity,
             filters=[f.model_dump() for f in data.filters],
             columns=data.columns,
@@ -96,10 +133,17 @@ async def execute_query(
             detail=str(e),
         )
 
+    pagination = _paginate_meta(data.page, data.per_page, total)
     return {
         "success": True,
-        "data": rows,
-        "meta": _paginate_meta(data.page, data.per_page, total),
+        "data": {
+            "columns": select_cols,
+            "rows": rows,
+            "total": total,
+            "page": pagination["page"],
+            "per_page": pagination["per_page"],
+            "total_pages": pagination["total_pages"],
+        },
     }
 
 

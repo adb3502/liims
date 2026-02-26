@@ -35,6 +35,7 @@ import { OmicsResultsPage } from '@/features/instruments/OmicsResultsPage'
 import { EnrollmentDashboardPage } from '@/features/reports/EnrollmentDashboardPage'
 import { InventoryDashboardPage } from '@/features/reports/InventoryDashboardPage'
 import { QualityDashboardPage } from '@/features/reports/QualityDashboardPage'
+import { DataExplorerPage } from '@/features/reports/DataExplorerPage'
 import { QueryBuilderPage } from '@/features/reports/QueryBuilderPage'
 import { ReportGeneratorPage } from '@/features/reports/ReportGeneratorPage'
 import { FileManagerPage } from '@/features/files/FileManagerPage'
@@ -46,11 +47,13 @@ import { AccessLogsPage } from '@/features/admin/AccessLogsPage'
 import { ScheduledReportsPage } from '@/features/admin/ScheduledReportsPage'
 import { NotificationsPage } from '@/features/notifications/NotificationsPage'
 import { ProfilePage } from '@/features/profile/ProfilePage'
+import { ProtocolsPage } from '@/features/protocols/ProtocolsPage'
 import { PageSpinner } from '@/components/ui/spinner'
 import { SampleProcessingPage } from '@/features/samples/SampleProcessingPage'
 import { SampleQueuePage } from '@/features/instruments/SampleQueuePage'
 import { LabelGeneratorPage } from '@/features/samples/LabelGeneratorPage'
 import { SitesDashboardPage } from '@/features/reports/SitesDashboardPage'
+import { SiteEnrollmentDashboardPage } from '@/features/reports/SiteEnrollmentDashboardPage'
 import type { UserRole } from '@/types'
 
 // --- Route guards ---
@@ -233,10 +236,12 @@ export const routes: RouteObject[] = [
         path: 'reports',
         children: [
           { path: 'enrollment', element: <EnrollmentDashboardPage /> },
+          { path: 'enrollment/sites/:siteCode', element: <SiteEnrollmentDashboardPage /> },
           { path: 'inventory', element: <InventoryDashboardPage /> },
           { path: 'sites', element: <SitesDashboardPage /> },
           { path: 'data-availability', element: <ReportGeneratorPage /> },
           { path: 'quality', element: <QualityDashboardPage /> },
+          { path: 'data-explorer', element: <DataExplorerPage /> },
           { path: 'query-builder', element: <QueryBuilderPage /> },
         ],
       },
@@ -266,6 +271,9 @@ export const routes: RouteObject[] = [
 
       // Profile
       { path: 'profile', element: <ProfilePage /> },
+
+      // Protocols / SOP library
+      { path: 'protocols', element: <ProtocolsPage /> },
 
       // Catch-all
       { path: '*', element: <NotFoundPage /> },

@@ -18,7 +18,8 @@ LABEL_GROUPS = {
     'epigenetics': ['E1', 'E2', 'E3', 'E4'],
     'samples': ['CS1', 'R1', 'H1', ''],  # 4th position is blank for A, H2 for B participants
     'edta': ['EDTA1', 'EDTA2', 'EDTA3', 'EDTA4'],
-    'sst_fl_blood': ['SST1', 'SST2', 'Fl1', 'B1']
+    'sst_fl_blood': ['SST1', 'SST2', 'Fl1', 'B1'],
+    'urine': ['U1']
 }
 
 # Cryovial layout (5 per row with row gutters)
@@ -69,7 +70,8 @@ def create_label_collections(participants: List[str]) -> Dict[str, List[str]]:
         'epigenetics': [],
         'samples': [],
         'edta': [],
-        'sst_fl_blood': []
+        'sst_fl_blood': [],
+        'urine': []
     }
 
     for participant in participants:
@@ -280,7 +282,12 @@ def generate_labels_for_codes(codes: List[str], output_dir: Path, date_str: str 
     cryo_filename = f'labels_cryovial{filename_suffix}.docx'
     cryo_path = build_docx(collections['cryovial'], output_dir / cryo_filename, CRYO_CONFIG)
     generated_files.append(cryo_path)
-    
+
+    # Generate urine labels (5 per row, same layout as cryovial, continuous flow)
+    urine_filename = f'labels_urine{filename_suffix}.docx'
+    urine_path = build_docx(collections['urine'], output_dir / urine_filename, CRYO_CONFIG)
+    generated_files.append(urine_path)
+
     # Generate normal labels (4 per row)
     for group_name in ['epigenetics', 'samples', 'edta', 'sst_fl_blood']:
         normal_filename = f'labels_{group_name}{filename_suffix}.docx'

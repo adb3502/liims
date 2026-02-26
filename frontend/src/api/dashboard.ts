@@ -7,11 +7,25 @@ import api from '@/lib/api'
 
 // --- Types ---
 
+export interface DemographicStats {
+  by_age_group: Array<{ age_group: string; count: number }>
+  by_sex: Array<{ sex: string; count: number }>
+  by_age_sex: Array<{ age_group: string; sex: string; count: number }>
+  urban_rural: { urban: number; rural: number }
+  hba1c_status: { normal: number; prediabetic: number; diabetic: number }
+  age_distribution: number[]
+  hba1c_distribution: number[]
+}
+
 export interface EnrollmentStats {
-  total: number
-  by_site: Array<{ site_id: string; site_name: string; count: number }>
+  total_participants: number
+  by_site: Array<{ site_name: string; site_code: string; count: number }>
   by_wave: Array<{ wave: number; count: number }>
-  enrollment_over_time: Array<{ date: string; count: number; cumulative: number }>
+  enrollment_rate_30d: Array<{ date: string; count: number }>
+  enrollment_over_time: Array<{ date: string; count: number }>
+  enrollment_by_site_month?: Array<{ date: string; site_code: string; count: number }>
+  recent_30d: number
+  demographics?: DemographicStats
 }
 
 export interface InventoryStats {
@@ -61,6 +75,27 @@ export interface QualityStats {
   }
 }
 
+export interface EnrollmentMatrixCell {
+  count: number
+  target: number
+}
+
+export interface EnrollmentMatrixSite {
+  code: string
+  name: string
+}
+
+export interface EnrollmentMatrixStats {
+  sites: EnrollmentMatrixSite[]
+  group_codes: string[]
+  matrix: Record<string, Record<string, EnrollmentMatrixCell>>
+  totals: {
+    by_site: Record<string, { count: number; target: number }>
+    by_group: Record<string, { count: number; target: number }>
+    grand: { count: number; target: number }
+  }
+}
+
 export interface DashboardOverview {
   enrollment: { total: number; recent_30d: number }
   samples: { total: number; in_storage: number }
@@ -76,6 +111,8 @@ export const dashboardKeys = {
   all: ['dashboard'] as const,
   overview: () => [...dashboardKeys.all, 'overview'] as const,
   enrollment: () => [...dashboardKeys.all, 'enrollment'] as const,
+  enrollmentMatrix: () => [...dashboardKeys.all, 'enrollment-matrix'] as const,
+  enrollmentBySite: (code: string) => [...dashboardKeys.all, 'enrollment', 'site', code] as const,
   inventory: () => [...dashboardKeys.all, 'inventory'] as const,
   fieldOps: () => [...dashboardKeys.all, 'field-ops'] as const,
   instruments: () => [...dashboardKeys.all, 'instruments'] as const,
@@ -100,6 +137,32 @@ export function useDashboardEnrollment() {
     queryKey: dashboardKeys.enrollment(),
     queryFn: async () => {
       const res = await api.get<{ success: true; data: EnrollmentStats }>('/dashboard/enrollment')
+      return res.data.data
+    },
+    staleTime: 60_000,
+  })
+}
+
+export function useDashboardEnrollmentBySite(siteCode: string) {
+  return useQuery({
+    queryKey: dashboardKeys.enrollmentBySite(siteCode),
+    queryFn: async () => {
+      const res = await api.get<{ success: true; data: EnrollmentStats }>(
+        '/dashboard/enrollment',
+        { params: { site_code: siteCode } }
+      )
+      return res.data.data
+    },
+    staleTime: 60_000,
+    enabled: !!siteCode,
+  })
+}
+
+export function useDashboardEnrollmentMatrix() {
+  return useQuery({
+    queryKey: dashboardKeys.enrollmentMatrix(),
+    queryFn: async () => {
+      const res = await api.get<{ success: true; data: EnrollmentMatrixStats }>('/dashboard/enrollment-matrix')
       return res.data.data
     },
     staleTime: 60_000,

@@ -11,7 +11,7 @@
   "categories": ["medical", "productivity"],
   "icons": [
     {
-      "src": "/vite.svg",
+      "src": "/logo-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"

@@ -48,6 +48,7 @@ export interface QueryResponse {
   total: number
   page: number
   per_page: number
+  total_pages: number
 }
 
 // --- Query Keys ---
