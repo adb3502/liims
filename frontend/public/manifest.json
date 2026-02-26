@@ -15,9 +15,16 @@
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
+    },
+    {
+      "src": "/logo-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ],
-  "screenshots": [],
   "prefer_related_applications": false,
-  "related_applications": []
+  "related_applications": [],
+  "lang": "en",
+  "dir": "ltr"
 }

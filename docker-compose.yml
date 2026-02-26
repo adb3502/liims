@@ -31,6 +31,7 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
       - DEBUG=${DEBUG:-false}
       - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost","http://localhost:80"]}
+      - CORS_ALLOW_ALL=${CORS_ALLOW_ALL:-true}
       - JWT_EXPIRY_HOURS=${JWT_EXPIRY_HOURS:-24}
       - BCRYPT_ROUNDS=${BCRYPT_ROUNDS:-12}
       - ODK_CENTRAL_URL=${ODK_CENTRAL_URL:-}

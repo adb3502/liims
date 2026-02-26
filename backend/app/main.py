@@ -43,11 +43,11 @@ app.add_middleware(SecurityHeadersMiddleware, enable_hsts=not settings.DEBUG)
 # Request ID injection
 app.add_middleware(RequestIDMiddleware)
 
-# CORS - tighten in production via CORS_ORIGINS env var
+# CORS — allow all origins for local-network deployment, or restrict via CORS_ORIGINS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
+    allow_origins=["*"] if settings.CORS_ALLOW_ALL else settings.CORS_ORIGINS,
+    allow_credentials=not settings.CORS_ALLOW_ALL,  # credentials incompatible with wildcard origin
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 )

@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8080"]
+    CORS_ALLOW_ALL: bool = False  # Set True for local-network deployment
 
     # Session
     SESSION_TIMEOUT_MINUTES: int = 30
