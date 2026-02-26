@@ -116,6 +116,7 @@ const COLOR_BY_OPTIONS = [
   { value: 'age_group', label: 'Age Group' },
   { value: 'sex', label: 'Sex' },
   { value: 'age_sex', label: 'Age + Sex' },
+  { value: 'age_sex', label: 'Age + Sex' },
   { value: 'site', label: 'Centre' },
   { value: 'site_type', label: 'Site (Urban/Rural)' },
 ] as const
@@ -885,11 +886,41 @@ function getColorCategory(pt: RawDataPoint, colorByDim: ColorBy): string {
 }
 
 /** Deterministic jitter for scatter overlays — stable across re-renders.
- *  offset: center position (e.g. -0.25 to push left of the shape)
- *  spread: jitter width (e.g. 0.15 for tight cluster) */
-function deterministicJitter(pointIndex: number, groupIndex: number, offset = 0, spread = 0.15): number {
+ *  densityScale (0-1) narrows the spread at the tails to match violin shape. */
+function deterministicJitter(pointIndex: number, groupIndex: number, offset = 0, spread = 0.15, densityScale = 1): number {
   const seed = ((pointIndex * 2654435761 + groupIndex * 1597334677) >>> 0) % 10000
-  return offset + (seed / 10000 - 0.5) * spread
+  return offset + (seed / 10000 - 0.5) * spread * densityScale
+}
+
+/** Build a fast density lookup: for each value in `values`, return 0-1 scale
+ *  representing local density (1 = densest region, ~0 = sparse tails).
+ *  Uses a simple binned histogram approach for speed. */
+function buildDensityScales(values: number[]): number[] {
+  if (values.length < 3) return values.map(() => 1)
+  const sorted = [...values].sort((a, b) => a - b)
+  const min = sorted[0], max = sorted[sorted.length - 1]
+  const range = max - min
+  if (range === 0) return values.map(() => 1)
+  const nBins = Math.max(10, Math.min(30, Math.round(values.length / 5)))
+  const binWidth = range / nBins
+  const bins = new Array(nBins).fill(0)
+  for (const v of values) {
+    const b = Math.min(Math.floor((v - min) / binWidth), nBins - 1)
+    bins[b]++
+  }
+  // Smooth bins with a 3-wide moving average
+  const smooth = bins.map((_, i) => {
+    const lo = Math.max(0, i - 1), hi = Math.min(nBins - 1, i + 1)
+    let sum = 0, cnt = 0
+    for (let j = lo; j <= hi; j++) { sum += bins[j]; cnt++ }
+    return sum / cnt
+  })
+  const maxBin = Math.max(...smooth)
+  // Map each value to its smoothed density (0-1), with a floor so tails aren't invisible
+  return values.map((v) => {
+    const b = Math.min(Math.floor((v - min) / binWidth), nBins - 1)
+    return Math.max(0.15, smooth[b] / maxBin)
+  })
 }
 
 function DistributionTab({
@@ -1000,32 +1031,39 @@ function DistributionTab({
   const plotData = useMemo(() => {
     if (processedGroups.length === 0) return []
 
-    const buildHoverTexts = (g: typeof processedGroups[0]) => {
-      const hasRaw = g.rawPoints.length > 0 && g.rawPoints.length === g.values.length
-      return hasRaw ? g.rawPoints.map((pt) => buildPointHoverText(pt)) : undefined
-    }
-
-    // Box and violin use numeric x-axis with scatter overlays for color-by
+    // Box and violin — always use scatter overlay for points so positioning
+    // is identical regardless of Color By setting (Plotly native marker.color
+    // on box/violin doesn't support per-point color string arrays).
     const isBoxOrViolin = chartType === 'box' || chartType === 'violin' || chartType === 'half-violin'
     if (isBoxOrViolin) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const shapeTraces: any[] = []
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const pointTraces: any[] = []
-      const useColorOverlay = colorBy !== 'group' && showPoints
-      const colorLegendShown = new Set<string>()
-      // Whether points sit to the side or overlap the shape
+      const useColorBy = colorBy !== 'group'
       const side = pointsSide
       const isHalfViolin = chartType === 'half-violin'
+      const colorLegendShown = new Set<string>()
+
+      // Scatter offset tuned to mimic Plotly's native jitter aesthetic
+      let ptOffset: number
+      let ptSpread: number
+      if (chartType === 'box') {
+        ptOffset = side ? -0.3 : 0
+        ptSpread = side ? 0.2 : 0.3
+      } else if (isHalfViolin) {
+        ptOffset = -0.15
+        ptSpread = 0.15
+      } else {
+        ptOffset = side ? -0.4 : 0
+        ptSpread = side ? 0.2 : 0.3
+      }
 
       processedGroups.forEach((g, i) => {
         const color = getPaletteColor(groupBy, g.group, i, palette)
         const label = getGroupLabel(groupBy, g.group)
-        const hoverTexts = buildHoverTexts(g)
-        const hasRaw = !!hoverTexts
 
         if (chartType === 'box') {
-          // When side mode: shift box right, points go left
           const boxX = (side && showPoints) ? i + 0.1 : i
           shapeTraces.push({
             type: 'box' as const,
@@ -1033,23 +1071,18 @@ function DistributionTab({
             x: g.values.map(() => boxX),
             y: g.values,
             width: (side && showPoints) ? 0.4 : 0.5,
-            boxpoints: useColorOverlay ? false : (showPoints ? ('all' as const) : ('outliers' as const)),
-            jitter: 0.4,
-            pointpos: side ? -1.8 : 0,
+            boxpoints: false as const,
             marker: { color, size: 4, opacity: 0.7 },
             line: { color },
             fillcolor: `${color}33`,
-            text: useColorOverlay ? undefined : hoverTexts,
-            hovertemplate: hasRaw && !useColorOverlay
-              ? '%{text}<extra></extra>'
-              : `<b>${label}</b><br>` +
-                `Median: %{median:.2f}<br>` +
-                `Q1-Q3: ${g.q1.toFixed(2)}-${g.q3.toFixed(2)}<br>` +
-                `Mean: ${g.mean.toFixed(2)} \u00b1 ${g.sd.toFixed(2)}<br>` +
-                `N: ${g.n}<extra></extra>`,
+            hovertemplate:
+              `<b>${label}</b><br>` +
+              `Median: %{median:.2f}<br>` +
+              `Q1-Q3: ${g.q1.toFixed(2)}-${g.q3.toFixed(2)}<br>` +
+              `Mean: ${g.mean.toFixed(2)} \u00b1 ${g.sd.toFixed(2)}<br>` +
+              `N: ${g.n}<extra></extra>`,
           })
         } else {
-          // violin (full) or half-violin
           const useHalfSide = isHalfViolin
           shapeTraces.push({
             type: 'violin' as const,
@@ -1061,71 +1094,63 @@ function DistributionTab({
             side: useHalfSide ? ('positive' as const) : undefined,
             box: { visible: true },
             meanline: { visible: true },
-            points: useColorOverlay ? (false as const) : (showPoints ? ('all' as const) : (false as const)),
-            jitter: 0.3,
-            pointpos: useHalfSide ? -0.4 : (side ? -1.8 : 0),
+            points: false as const,
             marker: { color, size: 4, opacity: 0.7 },
             line: { color },
             fillcolor: `${color}33`,
-            text: useColorOverlay ? undefined : hoverTexts,
-            hovertemplate: hasRaw && !useColorOverlay
-              ? '%{text}<extra></extra>'
-              : `<b>${label}</b><br>N: ${g.n}<extra></extra>`,
+            hovertemplate: `<b>${label}</b><br>N: ${g.n}<extra></extra>`,
           })
         }
 
-        // Overlay scatter traces for per-point coloring
-        if (useColorOverlay && g.rawPoints.length > 0) {
-          const catMap = new Map<string, RawDataPoint[]>()
-          for (const pt of g.rawPoints) {
-            const cat = getColorCategory(pt, colorBy)
-            const arr = catMap.get(cat) ?? []
-            arr.push(pt)
-            catMap.set(cat, arr)
-          }
+        // Scatter overlay for points — always used (both Default and Color By)
+        // Density-scaled jitter: points spread wider where the violin is fat
+        if (showPoints && g.rawPoints.length > 0) {
+          const densityScales = buildDensityScales(g.rawPoints.map((p) => p.value))
 
-          // Compute scatter x offset to match where native pointpos places default points
-          let ptOffset: number
-          let ptSpread: number
-          if (chartType === 'box') {
-            ptOffset = side ? -0.32 : -0.05
-            ptSpread = side ? 0.18 : 0.25
-          } else if (isHalfViolin) {
-            ptOffset = -0.18
-            ptSpread = 0.14
+          if (useColorBy) {
+            // Group points by category, preserving original index for density lookup
+            const catMap = new Map<string, Array<{ pt: RawDataPoint; idx: number }>>()
+            for (let k = 0; k < g.rawPoints.length; k++) {
+              const pt = g.rawPoints[k]
+              const cat = getColorCategory(pt, colorBy)
+              const arr = catMap.get(cat) ?? []
+              arr.push({ pt, idx: k })
+              catMap.set(cat, arr)
+            }
+            for (const [cat, entries] of catMap) {
+              const catColor = getPointColor(entries[0].pt, colorBy, palette)
+              const isFirst = !colorLegendShown.has(cat)
+              if (isFirst) colorLegendShown.add(cat)
+              pointTraces.push({
+                type: 'scatter' as const,
+                mode: 'markers' as const,
+                x: entries.map((e, j) => i + deterministicJitter(j, i, ptOffset, ptSpread, densityScales[e.idx])),
+                y: entries.map((e) => e.pt.value),
+                marker: { color: catColor, size: 4, opacity: 0.6, line: { width: 0, color: 'transparent' } },
+                name: cat,
+                showlegend: isFirst,
+                legendgroup: `color_${cat}`,
+                text: entries.map((e) => buildPointHoverText(e.pt)),
+                hovertemplate: '%{text}<extra></extra>',
+              })
+            }
           } else {
-            // Full violin: keep points overlapping the shape center
-            ptOffset = side ? -0.45 : -0.05
-            ptSpread = side ? 0.15 : 0.25
-          }
-
-          for (const [cat, pts] of catMap) {
-            const catColor = getPointColor(pts[0], colorBy, palette)
-            const isFirst = !colorLegendShown.has(cat)
-            if (isFirst) colorLegendShown.add(cat)
-
+            // Default: all points same color as the group
             pointTraces.push({
               type: 'scatter' as const,
               mode: 'markers' as const,
-              x: pts.map((_, j) => i + deterministicJitter(j, i, ptOffset, ptSpread)),
-              y: pts.map((p) => p.value),
-              marker: {
-                color: catColor,
-                size: 5,
-                opacity: 0.8,
-
-              },
-              name: cat,
-              showlegend: isFirst,
-              legendgroup: `color_${cat}`,
-              text: pts.map(buildPointHoverText),
+              x: g.rawPoints.map((_, j) => i + deterministicJitter(j, i, ptOffset, ptSpread, densityScales[j])),
+              y: g.rawPoints.map((p) => p.value),
+              marker: { color, size: 4, opacity: 0.6, line: { width: 0, color: 'transparent' } },
+              name: label,
+              showlegend: false,
+              text: g.rawPoints.map(buildPointHoverText),
               hovertemplate: '%{text}<extra></extra>',
             })
           }
         }
       })
 
-      // Shape traces first (legend: group names), then point traces (legend: color categories)
       return [...shapeTraces, ...pointTraces]
     }
 
