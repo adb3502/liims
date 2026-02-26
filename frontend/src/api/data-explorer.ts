@@ -27,6 +27,14 @@ export interface DistributionBin {
   group: string
 }
 
+export interface RawDataPoint {
+  value: number
+  age_group: number
+  sex: string
+  site_code: string | null
+  participant_code: string
+}
+
 export interface DistributionResponse {
   parameter: string
   label: string
@@ -46,6 +54,8 @@ export interface DistributionResponse {
     values?: number[]
     bins?: DistributionBin[]
   }>
+  /** Raw per-point data for Color By and hover IDs */
+  rawData?: RawDataPoint[]
 }
 
 export interface CorrelationCell {
@@ -99,9 +109,18 @@ export interface DataExplorerFilters {
 
 // ── Query Keys ──
 
+export interface CohortCounts {
+  total: number
+  filtered_total?: number
+  by_age_group: Record<string, number>
+  by_sex: Record<string, number>
+  by_site: Record<string, number>
+}
+
 export const dataExplorerKeys = {
   all: ['data-explorer'] as const,
   parameters: () => [...dataExplorerKeys.all, 'parameters'] as const,
+  counts: (filters: DataExplorerFilters) => [...dataExplorerKeys.all, 'counts', filters] as const,
   distribution: (parameter: string, chartType: string, groupBy: string, filters: DataExplorerFilters) =>
     [...dataExplorerKeys.all, 'distribution', parameter, chartType, groupBy, filters] as const,
   correlation: (parameters: string[], method: string, filters: DataExplorerFilters) =>
@@ -129,6 +148,21 @@ export function useDataExplorerParameters() {
   })
 }
 
+export function useDataExplorerCounts(filters: DataExplorerFilters = {}) {
+  return useQuery({
+    queryKey: dataExplorerKeys.counts(filters),
+    queryFn: async () => {
+      const params: Record<string, string> = {}
+      if (filters.age_groups?.length) params.age_group = filters.age_groups.join(',')
+      if (filters.sex?.length) params.sex = filters.sex.join(',')
+      if (filters.site_ids?.length) params.site = filters.site_ids.join(',')
+      const res = await api.get<{ success: true; data: CohortCounts }>('/data-explorer/counts', { params })
+      return res.data.data
+    },
+    staleTime: 30_000,
+  })
+}
+
 export function useDataExplorerDistribution(
   parameter: string,
   chartType: 'box' | 'histogram',
@@ -142,6 +176,7 @@ export function useDataExplorerDistribution(
       const params: Record<string, string> = { parameter, group_by: groupBy }
       if (filters.age_groups?.length) params.age_group = filters.age_groups.join(',')
       if (filters.sex?.length) params.sex = filters.sex.join(',')
+      if (filters.site_ids?.length) params.site = filters.site_ids.join(',')
       const res = await api.get<{
         success: true;
         data: {
@@ -158,6 +193,7 @@ export function useDataExplorerDistribution(
         }
       }>('/data-explorer/distribution', { params })
       const raw = res.data.data
+      const rawData = raw.data as RawDataPoint[] | undefined
       // If backend returned server-side grouped data, use it directly
       if (raw.groups && raw.groups.length > 0) {
         return {
@@ -166,6 +202,7 @@ export function useDataExplorerDistribution(
           unit: raw.unit || '',
           chart_type: chartType,
           groups: raw.groups,
+          rawData,
         } as DistributionResponse
       }
       // Fallback: client-side grouping for backward compatibility
@@ -195,7 +232,7 @@ export function useDataExplorerDistribution(
           values,
         }
       })
-      return { parameter: raw.parameter, label: parameter, unit: raw.unit || '', chart_type: chartType, groups } as DistributionResponse
+      return { parameter: raw.parameter, label: parameter, unit: raw.unit || '', chart_type: chartType, groups, rawData } as DistributionResponse
     },
     enabled: enabled && !!parameter,
     staleTime: 60_000,
@@ -217,11 +254,13 @@ export function useDataExplorerCorrelation(
       }
       if (filters.age_groups?.length) params.age_group = filters.age_groups.join(',')
       if (filters.sex?.length) params.sex = filters.sex.join(',')
+      if (filters.site_ids?.length) params.site = filters.site_ids.join(',')
       const res = await api.get<{
         success: true;
         data: {
           method: string; parameters: string[]; matrix: (number | null)[][];
           p_values: (number | null)[][]; adjusted_p_values?: (number | null)[][];
+          n_counts?: number[][];
           multiple_comparison_note?: string; n_observations?: number;
         }
       }>('/data-explorer/correlation', { params })
@@ -236,7 +275,7 @@ export function useDataExplorerCorrelation(
           label_y: raw.parameters[j],
           r: r ?? 0,
           p_value: pMatrix[i]?.[j] ?? 1,
-          n: raw.n_observations ?? 0,
+          n: raw.n_counts?.[i]?.[j] ?? raw.n_observations ?? 0,
         }))
       )
       return {

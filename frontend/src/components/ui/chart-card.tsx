@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils'
-import { Maximize2 } from 'lucide-react'
+import { Maximize2, Minimize2 } from 'lucide-react'
 import { useState } from 'react'
 
 interface ChartCardProps {
@@ -31,15 +31,16 @@ export function ChartCard({
 }: ChartCardProps) {
   const [expanded, setExpanded] = useState(false)
 
-  return (
+  const card = (
     <div
       className={cn(
-        'rounded-xl bg-white border border-gray-100 overflow-hidden transition-all duration-200',
-        'hover:shadow-[0_2px_8px_-2px_rgba(0,0,0,0.06)]',
-        expanded && 'fixed inset-4 z-50 shadow-2xl',
+        'rounded-xl border border-gray-100 overflow-hidden transition-all duration-200',
+        !expanded && 'hover:shadow-[0_2px_8px_-2px_rgba(0,0,0,0.06)]',
+        expanded && 'fixed inset-4 z-[51] shadow-2xl',
         fullWidth && 'col-span-full',
         className
       )}
+      style={{ backgroundColor: '#ffffff' }}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-4 pb-2">
@@ -54,7 +55,7 @@ export function ChartCard({
             className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
             title={expanded ? 'Exit fullscreen' : 'Fullscreen'}
           >
-            <Maximize2 className="h-3.5 w-3.5" />
+            {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
           </button>
         </div>
       </div>
@@ -82,16 +83,23 @@ export function ChartCard({
           children
         )}
       </div>
-
-      {/* Fullscreen backdrop */}
-      {expanded && (
-        <div
-          className="fixed inset-0 bg-black/30 -z-10"
-          onClick={() => setExpanded(false)}
-        />
-      )}
     </div>
   )
+
+  if (expanded) {
+    return (
+      <>
+        {/* Backdrop — rendered as sibling, not child, so z-index works correctly */}
+        <div
+          className="fixed inset-0 z-50 bg-black/40"
+          onClick={() => setExpanded(false)}
+        />
+        {card}
+      </>
+    )
+  }
+
+  return card
 }
 
 /** Simple filter chip for chart filters */

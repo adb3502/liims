@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_role
@@ -401,7 +401,7 @@ async def get_distribution(
     parameter: str = Query(..., min_length=1, description="Parameter name"),
     age_group: str | None = Query(None, description="Comma-separated age groups (1-5)"),
     sex: str | None = Query(None, description="Comma-separated sex codes (M,F or A,B)"),
-    site: str | None = Query(None, max_length=20, description="Collection site code"),
+    site: str | None = Query(None, description="Comma-separated collection site codes"),
     group_by: str | None = Query(None, description="Group results by: age_group, sex, site"),
 ):
     """Return data points for distribution charts with descriptive statistics.
@@ -444,6 +444,10 @@ async def get_distribution(
                 f"Invalid sex value: {exc}. Use M/F or A/B.",
             )
 
+    site_codes: list[str] | None = None
+    if site:
+        site_codes = [s.strip().upper() for s in site.split(",") if s.strip()]
+
     is_clinical = parameter in CLINICAL_PARAM_MAP
     unit: str | None = None
 
@@ -479,8 +483,8 @@ async def get_distribution(
             query = query.where(Participant.age_group.in_(age_group_enums))
         if sex_enums:
             query = query.where(Participant.sex.in_(sex_enums))
-        if site:
-            query = query.where(CollectionSite.code == site)
+        if site_codes:
+            query = query.where(CollectionSite.code.in_(site_codes))
 
         result = await db.execute(query)
         rows = result.all()
@@ -535,8 +539,8 @@ async def get_distribution(
             query = query.where(Participant.age_group.in_(age_group_enums))
         if sex_enums:
             query = query.where(Participant.sex.in_(sex_enums))
-        if site:
-            query = query.where(CollectionSite.code == site)
+        if site_codes:
+            query = query.where(CollectionSite.code.in_(site_codes))
 
         result = await db.execute(query)
         rows = result.all()
@@ -582,8 +586,8 @@ async def get_correlation(
     param_names = [p.strip() for p in parameters.split(",") if p.strip()]
     if len(param_names) < 2:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "At least 2 parameters required.")
-    if len(param_names) > 10:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Maximum 10 parameters allowed.")
+    if len(param_names) > 100:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Maximum 100 parameters allowed.")
 
     # Collect data per participant for each parameter
     # participant_code -> {param_name: value}
@@ -647,6 +651,7 @@ async def get_correlation(
     n_params = len(param_names)
     matrix: list[list[float | None]] = [[None] * n_params for _ in range(n_params)]
     p_values: list[list[float | None]] = [[None] * n_params for _ in range(n_params)]
+    n_counts: list[list[int]] = [[0] * n_params for _ in range(n_params)]
 
     corr_fn = _spearman_corr if method == "spearman" else _pearson_corr
 
@@ -656,6 +661,10 @@ async def get_correlation(
         1 for pdata in participant_data.values()
         if all_params_set <= set(pdata.keys())
     )
+
+    # Per-parameter n counts (diagonal)
+    for i in range(n_params):
+        n_counts[i][i] = sum(1 for pdata in participant_data.values() if param_names[i] in pdata)
 
     for i in range(n_params):
         matrix[i][i] = 1.0
@@ -668,6 +677,10 @@ async def get_correlation(
                 if param_names[i] in pdata and param_names[j] in pdata:
                     paired_x.append(pdata[param_names[i]])
                     paired_y.append(pdata[param_names[j]])
+
+            pair_n = len(paired_x)
+            n_counts[i][j] = pair_n
+            n_counts[j][i] = pair_n
 
             r, p = corr_fn(paired_x, paired_y)
             matrix[i][j] = r
@@ -685,6 +698,7 @@ async def get_correlation(
             "matrix": matrix,
             "p_values": p_values,
             "p_values_adjusted": p_values_adjusted,
+            "n_counts": n_counts,
             "correction_method": "benjamini_hochberg",
             "n_observations": n_observations,
             "multiple_comparison_note": (
@@ -775,3 +789,113 @@ async def get_clinical_summary(
             "comorbidities": comorbidities,
         },
     }
+
+
+@router.get("/counts", response_model=dict)
+async def get_cohort_counts(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
+    age_group: str | None = Query(None, description="Comma-separated age group codes to filter by"),
+    sex: str | None = Query(None, description="Comma-separated sex codes (A,B) to filter by"),
+    site: str | None = Query(None, description="Comma-separated site codes to filter by"),
+):
+    """Return participant counts per age group, sex, and site for cohort filter sidebar.
+
+    When filter params are provided, returns a ``filtered_total`` with the
+    exact intersection count, and dimension breakdowns are also filtered.
+    """
+    # Parse filter values
+    age_groups = [a.strip() for a in age_group.split(",") if a.strip()] if age_group else []
+    sex_codes = [s.strip().upper() for s in sex.split(",") if s.strip()] if sex else []
+    site_codes = [s.strip().upper() for s in site.split(",") if s.strip()] if site else []
+
+    # Map frontend sex codes A/B to backend M/F for the enum comparison
+    sex_map = {"A": "M", "B": "F"}
+    sex_db_values = [sex_map.get(s, s) for s in sex_codes]
+
+    # Build base filter conditions
+    def base_conditions():
+        conditions = [Participant.is_deleted == False]  # noqa: E712
+        if age_groups:
+            age_enums = []
+            for ag in age_groups:
+                try:
+                    age_enums.append(AgeGroup(int(ag)))
+                except (ValueError, KeyError):
+                    pass
+            if age_enums:
+                conditions.append(Participant.age_group.in_(age_enums))
+        if sex_db_values:
+            sex_enums = []
+            for sv in sex_db_values:
+                try:
+                    sex_enums.append(Sex(sv))
+                except (ValueError, KeyError):
+                    pass
+            if sex_enums:
+                conditions.append(Participant.sex.in_(sex_enums))
+        if site_codes:
+            conditions.append(CollectionSite.code.in_(site_codes))
+        return conditions
+
+    has_filters = bool(age_groups or sex_codes or site_codes)
+
+    # --- Unfiltered totals (always returned for sidebar display) ---
+    total_q = select(func.count(Participant.id)).where(Participant.is_deleted == False)  # noqa: E712
+    total = (await db.execute(total_q)).scalar() or 0
+
+    # By age group (unfiltered)
+    age_q = (
+        select(Participant.age_group, func.count(Participant.id))
+        .where(Participant.is_deleted == False)  # noqa: E712
+        .group_by(Participant.age_group)
+    )
+    age_rows = (await db.execute(age_q)).all()
+    age_counts: dict[str, int] = {}
+    for row in age_rows:
+        key = str(row[0].value) if hasattr(row[0], "value") else str(row[0])
+        age_counts[key] = row[1]
+
+    # By sex (unfiltered)
+    sex_q = (
+        select(Participant.sex, func.count(Participant.id))
+        .where(Participant.is_deleted == False)  # noqa: E712
+        .group_by(Participant.sex)
+    )
+    sex_rows = (await db.execute(sex_q)).all()
+    sex_reverse = {"M": "A", "F": "B"}
+    sex_counts: dict[str, int] = {}
+    for row in sex_rows:
+        raw = row[0].value if hasattr(row[0], "value") else row[0]
+        key = sex_reverse.get(raw, raw)
+        sex_counts[key] = row[1]
+
+    # By site (unfiltered)
+    site_q = (
+        select(CollectionSite.code, func.count(Participant.id))
+        .join(CollectionSite, Participant.collection_site_id == CollectionSite.id)
+        .where(Participant.is_deleted == False)  # noqa: E712
+        .group_by(CollectionSite.code)
+    )
+    site_rows = (await db.execute(site_q)).all()
+    site_counts: dict[str, int] = {row[0]: row[1] for row in site_rows}
+
+    result: dict = {
+        "total": total,
+        "by_age_group": age_counts,
+        "by_sex": sex_counts,
+        "by_site": site_counts,
+    }
+
+    # --- Filtered total (exact intersection count) ---
+    if has_filters:
+        conds = base_conditions()
+        filtered_q = select(func.count(Participant.id))
+        if site_codes:
+            filtered_q = filtered_q.join(CollectionSite, Participant.collection_site_id == CollectionSite.id)
+        for c in conds:
+            filtered_q = filtered_q.where(c)
+        filtered_total = (await db.execute(filtered_q)).scalar() or 0
+        result["filtered_total"] = filtered_total
+
+    return {"success": True, "data": result}
