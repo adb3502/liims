@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_role
 from app.database import get_db
-from app.models.enums import BoxType, FreezerType, UserRole
+from app.models.enums import FreezerType, UserRole
 from app.models.user import User
 from app.schemas.storage import (
     AutoAssignRequest,

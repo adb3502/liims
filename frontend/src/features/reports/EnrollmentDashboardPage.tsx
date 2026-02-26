@@ -1285,15 +1285,18 @@ function EnrollmentMatrixTable() {
                     const count = cell?.count ?? 0
                     const target = cell?.target ?? 0
                     const remaining = Math.max(0, target - count)
-                    const pct = target > 0 ? Math.min((count / target) * 100, 100) : 0
+                    const rawPct = target > 0 ? (count / target) * 100 : 0
+                    const pct = Math.min(rawPct, 100)
                     const barColor =
-                      pct >= 100
-                        ? COLORS.success
-                        : pct >= 75
-                          ? COLORS.primary
-                          : pct >= 40
-                            ? COLORS.teal
-                            : COLORS.gray400
+                      rawPct > 100
+                        ? COLORS.danger
+                        : rawPct >= 90
+                          ? COLORS.success
+                          : rawPct >= 50
+                            ? COLORS.primary
+                            : rawPct >= 25
+                              ? COLORS.teal
+                              : COLORS.gray400
                     return (
                       <td key={gc} className="px-3 py-3 text-center">
                         <span className="tabular-nums text-gray-700">

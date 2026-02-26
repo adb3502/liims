@@ -16,7 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import UUIDPrimaryKeyMixin, TimestampMixin, Base
+from app.models.base import UUIDPrimaryKeyMixin, Base
 from app.models.enums import IccStatus, OmicsResultType
 
 

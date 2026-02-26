@@ -51,6 +51,7 @@ async def list_icc(
     sort: str = "created_at",
     order: str = Query("desc", pattern="^(asc|desc)$"),
 ):
+    """List ICC processing records with optional filtering and pagination."""
     svc = IccService(db)
     items, total = await svc.list_icc(
         page=page, per_page=per_page,
@@ -70,6 +71,7 @@ async def create_icc(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*WRITE_ROLES))],
 ):
+    """Create a new ICC processing record for a sample."""
     svc = IccService(db)
     try:
         icc = await svc.create_icc(data, created_by=current_user.id)
@@ -88,6 +90,7 @@ async def get_icc(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
 ):
+    """Retrieve a single ICC processing record by ID."""
     svc = IccService(db)
     detail = await svc.get_icc(icc_id)
     if detail is None:
@@ -105,6 +108,7 @@ async def update_icc(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*WRITE_ROLES))],
 ):
+    """Update an ICC processing record with optional status transition."""
     svc = IccService(db)
     try:
         icc = await svc.update_icc(icc_id, data, updated_by=current_user.id)

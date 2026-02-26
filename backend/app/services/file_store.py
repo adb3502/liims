@@ -15,7 +15,6 @@ from pathlib import Path
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.models.enums import AuditAction, FileCategory, NotificationSeverity, NotificationType, UserRole
 from app.models.file_store import ManagedFile, WatchDirectory
 from app.models.notification import Notification

@@ -18,7 +18,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import BaseModel, BaseModelNoSoftDelete, UUIDPrimaryKeyMixin, Base
+from app.models.base import BaseModel, UUIDPrimaryKeyMixin, Base
 from app.models.enums import BoxMaterial, BoxType, FreezerEventType, FreezerType
 
 

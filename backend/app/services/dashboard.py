@@ -779,11 +779,10 @@ class DashboardService:
     # ── Enrollment Matrix ─────────────────────────────────────────────
 
     # Per-site targets: target count PER GROUP CODE (per category).
-    # Baptist has 200 slots per group code, others have 100 per group code.
     _SITE_TARGETS: dict[str, int] = {
         "RMH": 100,     # 100 per category (e.g., 100 males aged 18-29)
         "SSSSMH": 100,  # 100 per category
-        "BBH": 200,     # 200 per category (largest site)
+        "BBH": 100,     # 100 per category
         "CHAF": 100,    # 100 per category
         "BMC": 0,       # not active yet
         "JSS": 0,       # not active yet

@@ -26,6 +26,7 @@ async def get_enrollment_stats(
     current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
     site_code: str | None = Query(None, description="Filter by collection site code (e.g. BBH, RMH)"),
 ):
+    """Return enrollment statistics, optionally filtered by site."""
     svc = DashboardService(db)
     data = await svc.enrollment_summary(site_code=site_code)
     return {"success": True, "data": data}
@@ -36,6 +37,7 @@ async def get_inventory_stats(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
 ):
+    """Return sample inventory and storage utilization statistics."""
     svc = DashboardService(db)
     data = await svc.inventory_summary()
     return {"success": True, "data": data}
@@ -46,6 +48,7 @@ async def get_field_ops_stats(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
 ):
+    """Return field event and collection activity statistics."""
     svc = DashboardService(db)
     data = await svc.field_ops_summary()
     return {"success": True, "data": data}
@@ -56,6 +59,7 @@ async def get_instrument_stats(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
 ):
+    """Return instrument run and plate statistics."""
     svc = DashboardService(db)
     data = await svc.instrument_summary()
     return {"success": True, "data": data}
@@ -66,6 +70,7 @@ async def get_quality_stats(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
 ):
+    """Return QC pass/fail rates and quality metrics."""
     svc = DashboardService(db)
     data = await svc.quality_summary()
     return {"success": True, "data": data}
@@ -76,6 +81,7 @@ async def get_overview(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
 ):
+    """Return a combined overview of all dashboard sections."""
     svc = DashboardService(db)
     data = await svc.overview()
     return {"success": True, "data": data}

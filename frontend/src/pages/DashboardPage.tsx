@@ -113,19 +113,21 @@ function SiteMap({ markers }: SiteMapProps) {
 
                 {/* Enrollment progress bar — per-site targets from study design */}
                 {(() => {
-                  const SITE_TARGETS: Record<string, number> = { BBH: 2000, RMH: 1000, SSSSMH: 1000, CHAF: 1000, BMC: 0, JSS: 0 }
+                  const SITE_TARGETS: Record<string, number> = { BBH: 1000, RMH: 1000, SSSSMH: 1000, CHAF: 1000, BMC: 0, JSS: 0 }
                   const target = SITE_TARGETS[site.code] ?? 1000
-                  const pct = Math.min(100, Math.round((site.count / target) * 100))
+                  const rawPct = Math.round((site.count / target) * 100)
+                  const barPct = Math.min(100, rawPct)
+                  const barColor = rawPct > 100 ? '#DC2626' : rawPct >= 90 ? '#059669' : rawPct >= 50 ? '#D97706' : '#9CA3AF'
                   return (
                     <div>
                       <div className="flex items-center justify-between text-[11px] mb-1">
                         <span className="text-gray-400">Progress to target ({target})</span>
-                        <span className="font-medium" style={{ color: site.color }}>{pct}%</span>
+                        <span className="font-medium" style={{ color: barColor }}>{rawPct}%</span>
                       </div>
                       <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
                         <div
                           className="h-full rounded-full transition-all"
-                          style={{ width: `${pct}%`, backgroundColor: site.color }}
+                          style={{ width: `${barPct}%`, backgroundColor: barColor }}
                         />
                       </div>
                     </div>

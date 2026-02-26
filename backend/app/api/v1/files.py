@@ -58,6 +58,7 @@ async def list_watch_dirs(
     per_page: int = Query(20, ge=1, le=100),
     include_inactive: bool = Query(False),
 ):
+    """List configured NAS watch directories with pagination."""
     svc = WatchDirectoryService(db)
     items, total = await svc.list_watch_dirs(
         page=page, per_page=per_page, include_inactive=include_inactive,
@@ -75,6 +76,7 @@ async def create_watch_dir(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ADMIN_ROLES))],
 ):
+    """Register a new NAS watch directory for file discovery."""
     svc = WatchDirectoryService(db)
     watch_dir = await svc.create_watch_dir(data)
     return {
@@ -90,6 +92,7 @@ async def update_watch_dir(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ADMIN_ROLES))],
 ):
+    """Update an existing watch directory configuration."""
     svc = WatchDirectoryService(db)
     watch_dir = await svc.update_watch_dir(watch_dir_id, data)
     if watch_dir is None:
@@ -106,6 +109,7 @@ async def scan_watch_dir(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ADMIN_ROLES))],
 ):
+    """Trigger an immediate scan of a watch directory for new files."""
     svc = WatchDirectoryService(db)
     try:
         ingested = await svc.scan_directory(watch_dir_id)
@@ -134,6 +138,7 @@ async def list_files(
     sort: str = "discovered_at",
     order: str = Query("desc", pattern="^(asc|desc)$"),
 ):
+    """List managed files with filtering, search, and pagination."""
     svc = FileStoreService(db)
     items, total = await svc.list_files(
         page=page, per_page=per_page, search=search,
@@ -158,6 +163,7 @@ async def get_files_for_entity(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
 ):
+    """List all files associated with a specific entity."""
     svc = FileStoreService(db)
     files = await svc.get_files_for_entity(entity_type, entity_id)
     return {
@@ -174,6 +180,7 @@ async def verify_file_integrity(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ADMIN_ROLES))],
 ):
+    """Verify file integrity by re-computing and comparing checksums."""
     svc = FileStoreService(db)
     result = await svc.verify_file_integrity(file_id)
     if result.get("error") and "not found" in result["error"].lower():
@@ -189,6 +196,7 @@ async def get_file(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
 ):
+    """Retrieve metadata for a single managed file."""
     svc = FileStoreService(db)
     managed_file = await svc.get_file(file_id)
     if managed_file is None:
@@ -205,6 +213,7 @@ async def delete_file(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ADMIN_ROLES))],
 ):
+    """Soft-delete a managed file record."""
     svc = FileStoreService(db)
     managed_file = await svc.delete_file(file_id, deleted_by=current_user.id)
     if managed_file is None:
@@ -222,6 +231,7 @@ async def associate_file(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*WRITE_ROLES))],
 ):
+    """Associate a managed file with a domain entity."""
     svc = FileStoreService(db)
     managed_file = await svc.associate_file(
         file_id,

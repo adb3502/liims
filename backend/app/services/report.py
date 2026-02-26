@@ -18,11 +18,9 @@ from app.models.enums import (
     QCStatus,
     SampleStatus,
 )
-from app.models.field_ops import FieldEvent
 from app.models.instrument import InstrumentRun
 from app.models.omics import IccProcessing, OmicsResult, OmicsResultSet
 from app.models.participant import CollectionSite, Consent, Participant
-from app.models.partner import PartnerLabResult
 from app.models.sample import Sample
 from app.models.storage import (
     Freezer,

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enums import AuditAction, SampleStatus, SyncStatus
+from app.models.enums import AuditAction, SampleStatus
 from app.models.field_ops import FieldEventParticipant
 from app.models.participant import Participant
 from app.models.partner import StoolKit

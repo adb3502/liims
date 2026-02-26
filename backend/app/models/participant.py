@@ -18,7 +18,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
-from app.models.enums import AgeGroup, ConsentType, EnrollmentDateSource, EnrollmentSource, Sex
+from app.models.enums import AgeGroup, ConsentType, EnrollmentSource, Sex
 
 
 class CollectionSite(BaseModel):

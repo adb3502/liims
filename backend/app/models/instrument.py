@@ -17,7 +17,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import BaseModel, BaseModelNoSoftDelete, UUIDPrimaryKeyMixin, TimestampMixin, Base
+from app.models.base import BaseModel, UUIDPrimaryKeyMixin, Base
 from sqlalchemy import func
 from app.models.enums import InstrumentType, QCStatus, RunStatus, RunType
 

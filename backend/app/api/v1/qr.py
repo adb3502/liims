@@ -12,9 +12,9 @@ from sqlalchemy.orm import selectinload
 from app.core.deps import require_role
 from app.database import get_db
 from app.models.enums import UserRole
-from app.models.participant import CollectionSite, Participant
+from app.models.participant import CollectionSite
 from app.models.sample import Sample
-from app.models.storage import Freezer, StorageBox, StoragePosition, StorageRack
+from app.models.storage import StorageBox, StoragePosition, StorageRack
 from app.models.user import User
 from app.schemas.qr import QrBatchRequest, QrLookupResponse, QrStorageInfo
 from app.services.qr_code import generate_batch_qr, generate_sample_qr

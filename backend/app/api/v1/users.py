@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_active_user, require_role
+from app.core.deps import require_role
 from app.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User

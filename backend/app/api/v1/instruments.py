@@ -82,6 +82,7 @@ async def list_qc_templates(
     per_page: int = Query(20, ge=1, le=100),
     run_type: RunType | None = None,
 ):
+    """List QC plate templates with optional run type filter."""
     svc = QCTemplateService(db)
     items, total = await svc.list_templates(
         page=page, per_page=per_page, run_type=run_type,
@@ -99,6 +100,7 @@ async def create_qc_template(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*WRITE_ROLES))],
 ):
+    """Create a new QC plate template defining control well positions."""
     svc = QCTemplateService(db)
     template = await svc.create_template(data, created_by=current_user.id)
     return {
@@ -120,6 +122,7 @@ async def list_plates(
     sort: str = "created_at",
     order: str = Query("desc", pattern="^(asc|desc)$"),
 ):
+    """List plates with optional filtering by run, search, and pagination."""
     svc = PlateService(db)
     items, total = await svc.list_plates(
         page=page, per_page=per_page, run_id=run_id,
@@ -138,6 +141,7 @@ async def create_plate(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*WRITE_ROLES))],
 ):
+    """Create a new plate for sample processing."""
     svc = PlateService(db)
     plate = await svc.create_plate(data, created_by=current_user.id)
     return {
@@ -152,6 +156,7 @@ async def get_plate_detail(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
 ):
+    """Retrieve plate details including well assignments and sample info."""
     svc = PlateService(db)
     detail = await svc.get_plate_detail(plate_id)
     if detail is None:
@@ -169,6 +174,7 @@ async def assign_wells(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*WRITE_ROLES))],
 ):
+    """Assign samples to specific wells on a plate."""
     svc = PlateService(db)
     try:
         created = await svc.assign_wells(
@@ -269,6 +275,7 @@ async def list_runs(
     sort: str = "created_at",
     order: str = Query("desc", pattern="^(asc|desc)$"),
 ):
+    """List instrument runs with optional filtering and pagination."""
     svc = RunService(db)
     items, total = await svc.list_runs(
         page=page, per_page=per_page,
@@ -289,6 +296,7 @@ async def create_run(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*WRITE_ROLES))],
 ):
+    """Create a new instrument run."""
     svc = RunService(db)
     run = await svc.create_run(data, created_by=current_user.id)
     detail = await svc.get_run(run.id)
@@ -304,6 +312,7 @@ async def get_run(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
 ):
+    """Retrieve details for a single instrument run."""
     svc = RunService(db)
     detail = await svc.get_run(run_id)
     if detail is None:
@@ -321,6 +330,7 @@ async def update_run(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*WRITE_ROLES))],
 ):
+    """Update metadata for an instrument run."""
     svc = RunService(db)
     run = await svc.update_run(run_id, data, updated_by=current_user.id)
     if run is None:
@@ -338,6 +348,7 @@ async def start_run(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*WRITE_ROLES))],
 ):
+    """Transition a run from planned to in-progress."""
     svc = RunService(db)
     try:
         run = await svc.start_run(run_id, operator_id=current_user.id)
@@ -357,6 +368,7 @@ async def complete_run(
     current_user: Annotated[User, Depends(require_role(*WRITE_ROLES))],
     failed: bool = Query(False),
 ):
+    """Mark an instrument run as completed or failed."""
     svc = RunService(db)
     try:
         run = await svc.complete_run(run_id, completed_by=current_user.id, failed=failed)
@@ -376,6 +388,7 @@ async def upload_run_results(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*WRITE_ROLES))],
 ):
+    """Upload omics results for a completed instrument run."""
     svc = RunService(db)
     try:
         result_set = await svc.upload_results(run_id, data, uploaded_by=current_user.id)
@@ -400,6 +413,7 @@ async def query_omics_results(
     participant_id: uuid.UUID | None = None,
     feature_id: str | None = None,
 ):
+    """Query individual omics results with optional filtering."""
     svc = OmicsQueryService(db)
     items, total = await svc.query_results(
         page=page, per_page=per_page,
@@ -422,6 +436,7 @@ async def list_omics_result_sets(
     run_id: uuid.UUID | None = None,
     result_type: OmicsResultType | None = None,
 ):
+    """List omics result sets with optional filtering by run or type."""
     svc = OmicsQueryService(db)
     items, total = await svc.list_result_sets(
         page=page, per_page=per_page,
@@ -440,6 +455,7 @@ async def get_omics_result_set(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
 ):
+    """Retrieve a single omics result set by ID."""
     svc = OmicsQueryService(db)
     result_set = await svc.get_result_set(result_set_id)
     if result_set is None:
@@ -464,6 +480,7 @@ async def list_instruments(
     sort: str = "created_at",
     order: str = Query("desc", pattern="^(asc|desc)$"),
 ):
+    """List instruments with optional search, type filter, and pagination."""
     svc = InstrumentService(db)
     items, total = await svc.list_instruments(
         page=page, per_page=per_page, search=search,
@@ -483,6 +500,7 @@ async def create_instrument(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ADMIN_ROLES))],
 ):
+    """Register a new laboratory instrument."""
     svc = InstrumentService(db)
     instrument = await svc.create_instrument(data, created_by=current_user.id)
     return {
@@ -497,6 +515,7 @@ async def get_instrument(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
 ):
+    """Retrieve details for a single instrument."""
     svc = InstrumentService(db)
     instrument = await svc.get_instrument(instrument_id)
     if instrument is None:
@@ -514,6 +533,7 @@ async def update_instrument(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(*ADMIN_ROLES))],
 ):
+    """Update an instrument's configuration or status."""
     svc = InstrumentService(db)
     instrument = await svc.update_instrument(instrument_id, data, updated_by=current_user.id)
     if instrument is None:

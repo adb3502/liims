@@ -8,7 +8,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.enums import AuditAction, SampleType
+from app.models.enums import AuditAction
 from app.models.participant import CollectionSite, Consent, Participant
 from app.models.sample import Sample
 from app.models.user import AuditLog

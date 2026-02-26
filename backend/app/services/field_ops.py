@@ -4,7 +4,7 @@ import logging
 import uuid
 from datetime import date, datetime, timezone
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 

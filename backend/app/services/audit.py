@@ -6,8 +6,6 @@ old/new value diffs, user context, and IP address tracking.
 
 import logging
 import uuid
-from datetime import datetime, timezone
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import AuditAction

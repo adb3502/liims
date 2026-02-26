@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_active_user, require_role
+from app.core.deps import require_role
 from app.database import get_db
 from app.models.enums import AgeGroup, AuditAction, EnrollmentSource, Sex, UserRole
 from app.models.participant import CollectionSite, Participant

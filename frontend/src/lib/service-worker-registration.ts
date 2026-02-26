@@ -44,9 +44,9 @@ export function registerServiceWorker(): void {
         }
       })
 
-      console.log('SW registered:', registration.scope)
-    } catch (error) {
-      console.log('SW registration failed:', error)
+      // Service worker registered successfully
+    } catch {
+      // Service worker registration failed — non-critical in production
     }
   })
 }
