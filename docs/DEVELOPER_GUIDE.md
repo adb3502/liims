@@ -79,6 +79,8 @@ Log/history tables use `BaseModelNoSoftDelete` (no `is_deleted` column).
 
 **Enums** (`app/models/enums.py`): All enum types in one file -- `UserRole`, `SampleType`, `SampleStatus`, `FreezerType`, `BoxType`, `AuditAction`, `NotificationType`, and many more. Python `enum.Enum` subclasses that map to PostgreSQL enum columns.
 
+`UserRole` values (as of migration 005): `SUPER_ADMIN`, `LII_PI_RESEARCHER`, `SCIENTIST`, `ICMR_CAR_JRF`, `ICMR_CAR_POSTDOC`, `FIELD_OPERATIVE`, `CLINICAL_TEAM`, `CLINICAL_PARTNER`, `PI_RESEARCHER`.
+
 **Model files**:
 
 | File | Key Models |
@@ -138,7 +140,7 @@ The `api_router` aggregates all sub-routers under `/api/v1`:
 | `instruments.py` | `/instruments` | Plates, runs, wells |
 | `icc.py` | `/icc` | ICC workflow stages |
 | `dashboard.py` | `/dashboard` | Cached dashboard data |
-| `data_explorer.py` | `/data-explorer` | Ad-hoc data analysis |
+| `data_explorer.py` | `/data-explorer` | Ad-hoc data analysis — distribution, scatter, correlation, metadata table, strata |
 | `reports.py` | `/reports` | PDF generation, scheduled reports |
 | `query_builder.py` | `/query-builder` | Dynamic query execution |
 | `labels.py` | `/labels` | A4 label sheet generation |
@@ -151,6 +153,20 @@ The `api_router` aggregates all sub-routers under `/api/v1`:
 | `collection_sites.py` | `/sites` | Site management |
 | `protocols.py` | `/protocols` | SOP library |
 | `participant_locations.py` | `/participant-locations` | Geocoding data |
+
+### Key Data Explorer Endpoints
+
+`GET /api/v1/data-explorer/parameters` — list all available numeric parameters (clinical JSONB + lab tests).
+
+`GET /api/v1/data-explorer/strata` — list categorical JSONB fields available for stratification (dietary_pattern, exercise, smoking_status, etc.).
+
+`GET /api/v1/data-explorer/distribution` — distribution data with optional `group_by` (age_group/sex/site) or `strata` (categorical field from /strata). Supports `age_group`, `sex`, `site` cohort filters.
+
+`GET /api/v1/data-explorer/scatter` — scatter plot data for two parameters with Pearson/Spearman correlation, R², and linear regression stats.
+
+`GET /api/v1/data-explorer/correlation` — pairwise Pearson/Spearman correlation matrix across selected parameters.
+
+`GET /api/v1/data-explorer/metadata-table` — paginated flat table of participant core fields + demographic/lifestyle/clinical score fields extracted from the clinical_data JSONB column.
 
 ### Tasks: `app/tasks/`
 
@@ -232,20 +248,27 @@ Route structure:
   /instruments/runs             -- InstrumentRunsPage
   /instruments/omics            -- OmicsResultsPage
   /instruments/icc              -- IccWorkflowPage
-  /reports/enrollment           -- EnrollmentDashboardPage
-  /reports/inventory            -- InventoryDashboardPage
-  /reports/quality              -- QualityDashboardPage
-  /reports/sites                -- SitesDashboardPage
-  /reports/data-explorer        -- DataExplorerPage
-  /reports/query-builder        -- QueryBuilderPage
-  /admin/users                  -- RoleGuard -> UserManagementPage
-  /admin/settings               -- SystemSettingsPage
-  /admin/audit-logs             -- AuditLogsPage
-  /admin/files                  -- FileManagerPage
-  /notifications                -- NotificationsPage
-  /profile                      -- ProfilePage
-  /protocols                    -- ProtocolsPage
-  *                             -- NotFoundPage
+  /reports/enrollment                    -- EnrollmentDashboardPage
+  /reports/enrollment/sites/:siteCode    -- SiteEnrollmentDashboardPage (per-site drill-down)
+  /reports/inventory                     -- InventoryDashboardPage
+  /reports/quality                       -- QualityDashboardPage
+  /reports/sites                         -- SitesDashboardPage
+  /reports/data-availability             -- ReportGeneratorPage
+  /reports/data-explorer                 -- DataExplorerPage (distribution, scatter, correlation)
+  /reports/metadata-explorer             -- MetadataExplorerPage (participant metadata table)
+  /reports/query-builder                 -- QueryBuilderPage
+  /admin/users                           -- RoleGuard -> UserManagementPage
+  /admin/users/:id                       -- UserDetailPage
+  /admin/replica                         -- ReadReplicaPage
+  /admin/audit-logs                      -- AuditLogsPage
+  /admin/access-logs                     -- AccessLogsPage
+  /admin/reports                         -- ScheduledReportsPage
+  /admin/settings                        -- SystemSettingsPage
+  /admin/files                           -- FileManagerPage
+  /notifications                         -- NotificationsPage
+  /profile                               -- ProfilePage
+  /protocols                             -- ProtocolsPage
+  *                                      -- NotFoundPage
 ```
 
 ### Pages: `src/pages/`
@@ -269,7 +292,7 @@ Each feature module is a directory containing page components, sub-components, a
 | `field-ops/` | Event List/Detail, Bulk Digitize |
 | `partners/` | Import Wizard, History, ODK Sync, Stool Kit Tracker, Results |
 | `instruments/` | Dashboard, Plates, Runs, Run Detail, ICC, Omics, Sample Queue |
-| `reports/` | Enrollment, Inventory, Quality, Sites, Data Explorer, Query Builder, Report Generator |
+| `reports/` | Enrollment, SiteEnrollment (per-site drill-down), Inventory, Quality, Sites, DataExplorer, MetadataExplorer, QueryBuilder, ReportGenerator |
 | `admin/` | User Management, User Detail, System Settings, Audit Logs, Access Logs, Scheduled Reports, Read Replica |
 | `files/` | File Manager |
 | `notifications/` | Notification center |
@@ -395,7 +418,7 @@ Zustand stores for client-side state:
    async def create_widget(
        data: WidgetCreate,
        db: AsyncSession = Depends(get_db),
-       user: User = Depends(require_role(UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER)),
+       user: User = Depends(require_role(UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER)),
    ):
        widget = await widget_service.create_widget(db, data, user)
        return {"success": True, "data": WidgetResponse.model_validate(widget)}
@@ -531,10 +554,10 @@ async def delete_widget(
     ...
 ```
 
-**Frontend** -- use `<RoleGuard>` component:
+**Frontend** -- use `<RoleGuard>` component (use BHARAT role strings):
 
 ```tsx
-<RoleGuard roles={['super_admin', 'lab_manager']}>
+<RoleGuard roles={['super_admin', 'lii_pi_researcher']}>
   <AdminOnlyPage />
 </RoleGuard>
 ```

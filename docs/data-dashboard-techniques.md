@@ -483,6 +483,63 @@ A modal with:
 
 ---
 
+## 11. Scatter plot + regression
+
+### Backend endpoint
+
+`GET /data-explorer/scatter?x=bmi&y=hemoglobin&age_group=1,2&sex=M` returns raw `(x, y, participant_code, age_group, sex, site_code)` tuples plus pre-computed stats:
+
+```json
+{
+  "pearson_r": 0.42,
+  "pearson_p": 0.001,
+  "spearman_r": 0.39,
+  "spearman_p": 0.003,
+  "r_squared": 0.176,
+  "slope": 0.83,
+  "intercept": -12.1,
+  "n": 312
+}
+```
+
+### Regression line overlay
+
+Compute the line from `slope`/`intercept` at x-axis min and max:
+
+```ts
+const xs = [Math.min(...xVals), Math.max(...xVals)]
+const ys = xs.map(x => stats.slope * x + stats.intercept)
+
+const regressionTrace = {
+  type: 'scatter', mode: 'lines',
+  x: xs, y: ys,
+  line: { color: '#DC2626', width: 2, dash: 'dash' },
+  name: `r = ${stats.pearson_r.toFixed(2)}, p = ${formatP(stats.pearson_p)}`,
+}
+```
+
+### Stats panel
+
+Display below the chart:
+
+```tsx
+<div className="grid grid-cols-3 gap-4 text-sm">
+  <StatItem label="Pearson r" value={r.toFixed(3)} />
+  <StatItem label="R²" value={r2.toFixed(3)} />
+  <StatItem label="p-value" value={formatP(p)} />
+  <StatItem label="Spearman ρ" value={rho.toFixed(3)} />
+  <StatItem label="N" value={n.toString()} />
+</div>
+```
+
+p-value formatter:
+```ts
+const formatP = (p: number) =>
+  p < 0.001 ? '< 0.001' : p < 0.05 ? p.toFixed(3) : p.toFixed(3) + ' (n.s.)'
+```
+
+---
+
 ## Summary of techniques
 
 1. **ChartCard with 4 states** — never show empty or broken charts
@@ -500,3 +557,6 @@ A modal with:
 13. **Frontend-only derived dimensions** — regroup raw data client-side for computed categories
 14. **Consistent semantic colors** — same category = same color everywhere
 15. **Colorblind-safe palette option** — always available
+16. **Scatter + regression** — backend computes Pearson/Spearman/R² stats; frontend draws regression line from slope+intercept at x-axis extremes
+17. **Density-scaled jitter** — scatter overlay points follow violin shape (wider at distribution peak, narrower at tails)
+18. **Categorical stratification** — `/strata` endpoint enumerates JSONB fields; `?strata=<field>` on /distribution groups by that dimension server-side

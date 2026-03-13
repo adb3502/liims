@@ -136,17 +136,21 @@ Browser
 
 ### Role-Based Access Control (RBAC)
 
-7 roles with graduated permissions:
+9 BHARAT study-specific roles with graduated permissions:
 
-| Role | Scope |
-|------|-------|
-| `super_admin` | Full system access |
-| `lab_manager` | Lab operations, user management, reports |
-| `lab_technician` | Sample processing, storage, instruments |
-| `field_coordinator` | Field events, participant enrollment, bulk digitization |
-| `data_entry` | Participant and sample data entry |
-| `collaborator` | Read-only access to dashboards and reports |
-| `pi_researcher` | Read access with data explorer and query builder |
+| Role | DB value | Scope |
+|------|----------|-------|
+| `super_admin` | `super_admin` | Full system access, user management |
+| `lii_pi_researcher` | `lii_pi_researcher` | Lab operations, admin pages, reports, all write access |
+| `scientist` | `scientist` | Sample processing, storage, instruments, file upload |
+| `icmr_car_jrf` | `icmr_car_jrf` | Field events, participant enrollment, data entry |
+| `icmr_car_postdoc` | `icmr_car_postdoc` | Field events, participant enrollment |
+| `field_operative` | `field_operative` | Field events, participant enrollment, file read |
+| `clinical_team` | `clinical_team` | Field events, sample registration |
+| `clinical_partner` | `clinical_partner` | Read access to dashboards and field events |
+| `pi_researcher` | `pi_researcher` | Read access with data explorer and query builder |
+
+Alembic migration `005_rename_user_roles.py` renamed existing DB rows from the old generic taxonomy (LAB_MANAGER, LAB_TECHNICIAN, FIELD_COORDINATOR, DATA_ENTRY, COLLABORATOR) to the study-specific values above.
 
 Enforcement: Backend uses `require_role(*roles)` dependency on each route. Frontend uses `<RoleGuard roles={[...]}/>` component on protected routes.
 
@@ -376,8 +380,8 @@ All API responses follow a consistent envelope:
 
 | Element | Value |
 |---------|-------|
-| Font (sans) | Red Hat Display (Google Fonts) |
-| Font (mono) | JetBrains Mono |
+| Font (sans) | Red Hat Display (self-hosted woff2, no CDN dependency) |
+| Font (mono) | JetBrains Mono (self-hosted woff2) |
 | Primary Blue | `#3674F6` |
 | Teal | `#03B6D9` |
 | Gradient | `#3674F6` to `#03B6D9` |

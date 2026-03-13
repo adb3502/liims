@@ -27,6 +27,7 @@ cp .env.example .env
 | `DEBUG` | No | `false` | Enable debug mode. Exposes stack traces in errors and verbose SQL logging. Never enable in production. |
 | `FRONTEND_PORT` | No | `80` | Host port for the frontend. Change if port 80 is in use. |
 | `CORS_ORIGINS` | No | `["http://localhost","http://localhost:80"]` | JSON array of allowed CORS origins. Add your machine's IP for LAN access. |
+| `CORS_ALLOW_ALL` | No | `false` | Set to `true` to allow all origins (`*`). Useful for local-network deployments where the server IP changes. Do not enable in production. |
 | `JWT_EXPIRY_HOURS` | No | `24` | JWT token lifetime in hours. |
 | `BCRYPT_ROUNDS` | No | `12` | bcrypt hashing cost factor. Higher = slower but more secure. |
 | `ODK_CENTRAL_URL` | No | -- | ODK Central server URL for form sync. |
@@ -440,13 +441,19 @@ docker compose restart api
 
 ### Docker build cache issues
 
-If changes do not appear after rebuild:
+BuildKit caches aggressively even with `--no-cache`. A truly fresh rebuild requires removing the image and build cache:
 
 ```bash
 docker compose down
 docker rmi $(docker compose config --images)
 docker builder prune -af
 docker compose up -d --build
+```
+
+To verify the correct bundle is deployed (Vite minifies variable names, so check for static strings):
+
+```bash
+docker compose exec frontend ls /usr/share/nginx/html/assets/index-*.js
 ```
 
 ### Windows-specific: line ending issues

@@ -1,8 +1,8 @@
 # LIMS UI Overhaul & Feature Completion — Design Document
 
 **Date**: 2026-02-24
-**Status**: Approved
-**Branch**: feature/ui-overhaul
+**Status**: Merged to master (2026-03-13) — see completion notes per workstream below
+**Branch**: feature/ui-overhaul → master
 
 ---
 
@@ -12,55 +12,48 @@ Complete overhaul of the LIMS frontend for the Longevity India (BHARAT) Study. T
 
 ## Workstreams
 
-### WS1: UI/UX Foundation
-- Install Recharts, Plotly.js, React-Leaflet, Framer Motion, TanStack Table
-- Create unified theme with Longevity India branding (gradient #3674F6 → #03B6D9)
-- Glassmorphism card components, animated stat cards with sparklines
-- Page transition animations
-- Consistent color palette for all data visualizations
-- Redesign sidebar with gradient background, smooth collapse animation
+### WS1: UI/UX Foundation ✅ DONE
+- ✅ Recharts, Plotly.js, React-Leaflet, TanStack Table installed
+- ✅ Longevity India branding theme (gradient #3674F6 → #03B6D9)
+- ✅ ChartCard with 4 states, stat cards
+- ✅ Sidebar with gradient background, collapse animation
+- ✅ Self-hosted Red Hat Display + JetBrains Mono (offline-capable)
 
-### WS2: Data Dashboards (6 tabs, inspired by Shiny app)
-1. **Overview Dashboard**: KPI cards with sparklines, enrollment trend chart, site map (Leaflet), recent activity
-2. **Enrollment Analytics**: Demographics pyramid, age×sex distribution, site comparison, monthly trends
-3. **Blood Biochemistry Explorer**: Parameter distribution (box/violin/histogram), scatter+regression, correlation heatmap, cohort filters
-4. **Quality & Lab**: QC rates, processing timelines, freezer gauges, sample type breakdown donuts
-5. **Field Operations**: Event timeline, check-in rates, site performance
-6. **Advanced Analytics**: PCA biplot, variable loadings table (PI/researcher role)
+### WS2: Data Dashboards ✅ DONE (except PCA)
+1. ✅ **Overview Dashboard**: KPI cards, enrollment trend, pin code participant map (Leaflet/CartoDB), site map, monthly summary
+2. ✅ **Enrollment Analytics**: Demographics, age×sex matrix, 10 group-code matrix per site (with targets), per-site drill-down pages at `/reports/enrollment/sites/:siteCode`
+3. ✅ **Data Explorer**: Box/violin/density/histogram/scatter plots, correlation heatmap, Color By, cohort filters, strata stratification, metadata table (MetadataExplorerPage)
+4. ✅ **Quality & Lab**: QC rates, processing timelines, freezer gauges, sample type donuts
+5. ✅ **Field Operations**: Event timeline, check-in rates
+6. ❌ **Advanced Analytics / PCA**: placeholder — requires numpy/scikit-learn on backend
 
-### WS3: Participant Management
-- Range creation: "1A-001 to 1A-050" bulk creates participants
-- Clinical data viewer on detail page (vitals, anthropometry, comorbidities, scores from ODK)
-- Lab results tab with all partner lab results per participant
-- Enhanced list with advanced filters, export
+### WS3: Participant Management ✅ DONE (range creation not built)
+- ✅ Clinical data viewer on detail page (vitals, anthropometry, comorbidities, ODK scores)
+- ✅ Lab results tab with partner lab results per participant
+- ✅ Enhanced list with filters
+- ❌ Range creation UI ("1A-001 to 1A-050" bulk create) — not built
 
-### WS4: Blood Report Extraction
+### WS4: Blood Report Extraction ❌ NOT STARTED
 - PDF upload endpoint for partner lab reports
-- Backend pdfplumber parsing for structured lab PDFs
-- Auto-mapping extracted values to canonical tests
-- Review/confirm UI before committing results
+- Backend pdfplumber parsing
 
-### WS5: Protocols/SOP Page
-- Read 11 BHARAT SOP documents from bharat-sop folder
-- Browsable protocol library with search and categories
-- PDF/DOCX viewer embedded in page
+### WS5: Protocols/SOP Page ✅ DONE
+- ✅ Browsable protocol library at `/protocols`
 
-### WS6: Feature Completion (all placeholder pages)
-- User Management: list, create, edit, role assignment, deactivate
-- Audit Logs: searchable, filterable timeline
-- System Settings: grouped settings editor
-- Stool Kit Tracker: issue, track, return workflow
-- Instrument Dashboard: utilization charts, run status
-- Query Builder: visual query interface with export
-- Notifications: full page with mark-read, filters
-- Import Wizard: step-by-step partner data import
-- File Manager: NAS file browser with associations
+### WS6: Feature Completion ✅ DONE
+- ✅ User Management (list, create, edit, role assignment, deactivate) — with BHARAT role names
+- ✅ Audit Logs — searchable, filterable timeline
+- ✅ System Settings
+- ✅ Stool Kit Tracker
+- ✅ Instrument Dashboard, Plates, Runs
+- ✅ Query Builder
+- ✅ Notifications page
+- ✅ Import Wizard + History
+- ✅ File Manager (NAS file browser)
 
-### WS7: Mobile/Tablet + Responsive
-- All pages responsive (sm/md/lg breakpoints)
-- Touch-friendly controls, larger tap targets
-- Collapsible sidebar as bottom nav on mobile
-- PWA manifest, offline indicators
+### WS7: Mobile/Tablet + Responsive ❌ NOT STARTED
+- All pages desktop-only currently
+- PWA manifest exists; service worker registers; background sync queue built
 
 ## Tech Stack Additions
 - recharts: Standard charts (bar, line, area, pie, radar)
