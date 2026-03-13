@@ -23,12 +23,12 @@ All 6 services run as Docker containers on a single `liims` bridge network. Ngin
 - **Field operations** -- collection events, bulk digitization, offline-capable data entry
 - **Partner lab integration** -- Healthians, 1mg, Lalpath, DecodeAge import/export
 - **Instruments** -- TECAN plate designer, instrument runs, proteomics/metabolomics pipeline, ICC workflow
-- **Dashboards and reports** -- enrollment, inventory, quality, site-level analytics, data explorer, query builder
+- **Dashboards and reports** -- enrollment matrix (10 group codes per site with targets), per-site drill-down, inventory, quality, sites overview, data explorer (distribution/scatter/correlation/metadata with stratification), query builder
 - **Label generation** -- A4 label sheets (python-docx), 22 labels per participant across 5 sample groups
 - **File store** -- managed NAS watch directories, integrity verification, file categorization
 - **Notifications** -- real-time alerts for freezer events, sync failures, backup health, consent withdrawals
 - **PWA** -- service worker, IndexedDB offline store, background sync
-- **Security** -- JWT auth with session revocation, RBAC (7 roles), rate limiting, security headers, account lockout
+- **Security** -- JWT auth with session revocation, RBAC (9 BHARAT study roles), rate limiting, security headers, account lockout
 
 ## Prerequisites
 
@@ -108,6 +108,7 @@ See `.env.example` for the full template. Key variables:
 | `DEBUG` | `false` | Enable debug mode, verbose SQL logging |
 | `FRONTEND_PORT` | `80` | Host port for the frontend |
 | `CORS_ORIGINS` | `["http://localhost"]` | JSON array of allowed CORS origins |
+| `CORS_ALLOW_ALL` | `false` | Allow all origins (`*`). Useful for LAN deployments. Never enable in production. |
 | `JWT_EXPIRY_HOURS` | `24` | JWT token lifetime |
 | `BCRYPT_ROUNDS` | `12` | bcrypt cost factor |
 | `ODK_CENTRAL_URL` | -- | ODK Central server URL |
