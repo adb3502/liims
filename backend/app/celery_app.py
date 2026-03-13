@@ -16,10 +16,6 @@ celery.conf.update(
     timezone="Asia/Kolkata",
     enable_utc=True,
     beat_schedule={
-        "refresh-dashboard-cache": {
-            "task": "app.tasks.dashboard.refresh_dashboard_cache",
-            "schedule": settings.DASHBOARD_REFRESH_INTERVAL_MINUTES * 60,
-        },
         "odk-sync-weekly": {
             "task": "app.tasks.odk.sync_odk_submissions",
             "schedule": crontab(hour=6, minute=0, day_of_week=1),  # Monday 6:00 AM IST
@@ -30,10 +26,6 @@ celery.conf.update(
         },
         "verify-nas-files": {
             "task": "app.tasks.files.verify_nas_files",
-            "schedule": 3600,  # hourly
-        },
-        "check-backup-health": {
-            "task": "app.tasks.backup.check_backup_health",
             "schedule": 3600,  # hourly
         },
         "process-scheduled-reports": {

@@ -94,7 +94,7 @@ export function ParticipantListPage() {
     }
   }
 
-  const canCreate = hasRole('super_admin', 'lab_manager', 'data_entry', 'field_coordinator')
+  const canCreate = hasRole('super_admin', 'lii_pi_researcher', 'icmr_car_jrf', 'field_operative')
 
   const siteLookup = useMemo(() => {
     const map = new Map<string, string>()
@@ -242,9 +242,15 @@ export function ParticipantListPage() {
                       onClick={() => navigate(`/participants/${p.id}`)}
                     >
                       <TableCell>
-                        <span className="font-mono font-medium text-primary">
-                          {p.participant_code}
-                        </span>
+                        <div className="flex flex-col">
+                          <span className="font-mono font-medium text-primary">{p.participant_code}</span>
+                          {p.computed_age != null && (
+                            <span className="text-xs text-muted-foreground">
+                              {p.computed_age} yrs
+                              {p.age_group_mismatch && <span className="ml-1 text-warning">&#9888;</span>}
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary">

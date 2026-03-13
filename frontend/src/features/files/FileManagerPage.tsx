@@ -119,7 +119,7 @@ function StatBlock({ label, value, icon }: { label: string; value: string | numb
 
 export function FileManagerPage() {
   const { hasRole } = useAuth()
-  const canAdmin = hasRole('super_admin', 'lab_manager')
+  const canAdmin = hasRole('super_admin', 'lii_pi_researcher')
 
   // File list state
   const [page, setPage] = useState(1)

@@ -51,7 +51,7 @@ export function ImportHistoryPage() {
 
   const imports = data?.data ?? []
   const totalPages = data?.meta ? Math.ceil(data.meta.total / data.meta.per_page) : 0
-  const canImport = hasRole('super_admin', 'lab_manager', 'data_entry')
+  const canImport = hasRole('super_admin', 'lii_pi_researcher', 'icmr_car_jrf')
 
   return (
     <div>

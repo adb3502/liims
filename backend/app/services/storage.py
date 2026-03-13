@@ -996,7 +996,7 @@ class StorageService:
 
             pct = stats["utilization_pct"]
             await notif_svc.notify_role(
-                role=UserRole.LAB_MANAGER,
+                role=UserRole.LII_PI_RESEARCHER,
                 notification_type=NotificationType.FREEZER_CAPACITY_WARNING,
                 severity=NotificationSeverity.WARNING,
                 title=f"Freezer capacity warning: {freezer_name}",
@@ -1034,7 +1034,7 @@ class StorageService:
             temp_str = f" ({event.observed_temp_c}°C)" if event.observed_temp_c else ""
 
             await notif_svc.notify_role(
-                role=UserRole.LAB_MANAGER,
+                role=UserRole.LII_PI_RESEARCHER,
                 notification_type=NotificationType.FREEZER_TEMP_EVENT,
                 severity=severity,
                 title=f"Freezer {event.event_type.value}: {freezer_name}",

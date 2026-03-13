@@ -20,7 +20,7 @@ router = APIRouter(prefix="/audit-logs", tags=["audit-logs"])
 @router.get("", response_model=dict)
 async def list_audit_logs(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_role(UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER))],
+    current_user: Annotated[User, Depends(require_role(UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER))],
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=100),
     user_id: uuid.UUID | None = None,

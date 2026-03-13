@@ -194,7 +194,7 @@ export function PlateDesignerPage() {
     ? Math.ceil(data.meta.total / data.meta.per_page)
     : 0
 
-  const canCreate = hasRole('super_admin', 'lab_manager', 'lab_technician')
+  const canCreate = hasRole('super_admin', 'lii_pi_researcher', 'scientist')
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
   const plates = data?.data ?? []

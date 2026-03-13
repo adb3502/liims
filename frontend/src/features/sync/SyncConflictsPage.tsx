@@ -30,7 +30,7 @@ export function SyncConflictsPage() {
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null)
   const [syncing, setSyncing] = useState(false)
 
-  const canManage = hasRole('super_admin', 'lab_manager', 'field_coordinator')
+  const canManage = hasRole('super_admin', 'lii_pi_researcher', 'field_operative')
   const conflicts = syncProgress?.conflicts ?? []
   const hasPending = (syncProgress?.total ?? 0) - (syncProgress?.completed ?? 0) > 0
 

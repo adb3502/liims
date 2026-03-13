@@ -33,6 +33,40 @@ export interface RawDataPoint {
   sex: string
   site_code: string | null
   participant_code: string
+  strata_value?: string | null
+}
+
+export interface StrataOption {
+  name: string
+  display_name: string
+  category: string
+}
+
+export interface MetadataRow {
+  participant_code: string
+  site_code: string | null
+  age_group: number | null
+  sex: string | null
+  computed_age: number | null
+  residential_area: string | null
+  education: string | null
+  occupation: string | null
+  dietary_pattern: string | null
+  exercise: string | null
+  smoking_status: string | null
+  alcohol_status: string | null
+  bp_sbp: number | null
+  bp_dbp: number | null
+  pulse_rate: number | null
+  height_cm: number | null
+  weight_kg: number | null
+  bmi: number | null
+  dass_depression: number | null
+  dass_anxiety: number | null
+  dass_stress: number | null
+  mmse_total: number | null
+  frail_score: number | null
+  frail_category: string | null
 }
 
 export interface DistributionResponse {
@@ -149,14 +183,16 @@ export const dataExplorerKeys = {
   all: ['data-explorer'] as const,
   parameters: () => [...dataExplorerKeys.all, 'parameters'] as const,
   counts: (filters: DataExplorerFilters) => [...dataExplorerKeys.all, 'counts', filters] as const,
-  distribution: (parameter: string, chartType: string, groupBy: string, filters: DataExplorerFilters) =>
-    [...dataExplorerKeys.all, 'distribution', parameter, chartType, groupBy, filters] as const,
+  distribution: (parameter: string, chartType: string, groupBy: string, filters: DataExplorerFilters, strata?: string) =>
+    [...dataExplorerKeys.all, 'distribution', parameter, chartType, groupBy, filters, strata ?? ''] as const,
   correlation: (parameters: string[], method: string, filters: DataExplorerFilters) =>
     [...dataExplorerKeys.all, 'correlation', parameters.join(','), method, filters] as const,
   scatter: (paramX: string, paramY: string, filters: DataExplorerFilters) =>
     [...dataExplorerKeys.all, 'scatter', paramX, paramY, filters] as const,
   clinicalSummary: (filters: DataExplorerFilters) =>
     [...dataExplorerKeys.all, 'clinical-summary', filters] as const,
+  strata: () => [...dataExplorerKeys.all, 'strata'] as const,
+  metadataTable: (params: Record<string, unknown>) => [...dataExplorerKeys.all, 'metadata-table', params] as const,
 }
 
 // ── Hooks ──
@@ -199,14 +235,16 @@ export function useDataExplorerDistribution(
   groupBy: 'age_group' | 'sex' | 'site',
   filters: DataExplorerFilters,
   enabled = true,
+  strata?: string,
 ) {
   return useQuery({
-    queryKey: dataExplorerKeys.distribution(parameter, chartType, groupBy, filters),
+    queryKey: dataExplorerKeys.distribution(parameter, chartType, groupBy, filters, strata),
     queryFn: async () => {
       const params: Record<string, string> = { parameter, group_by: groupBy }
       if (filters.age_groups?.length) params.age_group = filters.age_groups.join(',')
       if (filters.sex?.length) params.sex = filters.sex.join(',')
       if (filters.site_ids?.length) params.site = filters.site_ids.join(',')
+      if (strata) params.strata = strata
       const res = await api.get<{
         success: true;
         data: {
@@ -339,6 +377,45 @@ export function useDataExplorerScatter(
       return res.data.data
     },
     enabled: enabled && !!paramX && !!paramY,
+    staleTime: 60_000,
+  })
+}
+
+export function useDataExplorerStrata() {
+  return useQuery({
+    queryKey: dataExplorerKeys.strata(),
+    queryFn: async () => {
+      const res = await api.get<{ success: true; data: StrataOption[] }>('/data-explorer/strata')
+      return res.data.data
+    },
+    staleTime: 5 * 60_000,
+  })
+}
+
+export function useMetadataTable(params: {
+  page: number
+  per_page: number
+  age_group?: number
+  sex?: string
+  site?: string
+}) {
+  return useQuery({
+    queryKey: dataExplorerKeys.metadataTable(params as Record<string, unknown>),
+    queryFn: async () => {
+      const qp: Record<string, string> = {
+        page: String(params.page),
+        per_page: String(params.per_page),
+      }
+      if (params.age_group != null) qp.age_group = String(params.age_group)
+      if (params.sex) qp.sex = params.sex
+      if (params.site) qp.site = params.site
+      const res = await api.get<{
+        success: true
+        data: MetadataRow[]
+        meta: { total: number; page: number; per_page: number; total_pages: number }
+      }>('/data-explorer/metadata-table', { params: qp })
+      return { data: res.data.data, meta: res.data.meta }
+    },
     staleTime: 60_000,
   })
 }

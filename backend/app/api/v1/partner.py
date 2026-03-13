@@ -42,12 +42,13 @@ from app.services.partner import (
 router = APIRouter(prefix="/partner", tags=["partner"])
 
 ALL_ROLES = (
-    UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER, UserRole.LAB_TECHNICIAN,
-    UserRole.FIELD_COORDINATOR, UserRole.DATA_ENTRY,
-    UserRole.COLLABORATOR, UserRole.PI_RESEARCHER,
+    UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER, UserRole.SCIENTIST,
+    UserRole.ICMR_CAR_JRF, UserRole.ICMR_CAR_POSTDOC,
+    UserRole.FIELD_OPERATIVE,
+    UserRole.CLINICAL_PARTNER, UserRole.PI_RESEARCHER,
 )
-ADMIN_LAB = (UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER)
-FIELD_OPS = (UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER, UserRole.FIELD_COORDINATOR)
+ADMIN_LAB = (UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER)
+FIELD_OPS = (UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER, UserRole.FIELD_OPERATIVE)
 
 
 # ---------------------------------------------------------------------------

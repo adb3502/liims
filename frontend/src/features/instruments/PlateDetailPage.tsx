@@ -74,7 +74,7 @@ export function PlateDetailPage() {
   const [selectedWell, setSelectedWell] = useState<string | null>(null)
   const [showAssignDialog, setShowAssignDialog] = useState(false)
 
-  const canManage = hasRole('super_admin', 'lab_manager', 'lab_technician')
+  const canManage = hasRole('super_admin', 'lii_pi_researcher', 'scientist')
 
   // Build a map: well_position -> PlateWell
   const wellMap = useMemo(() => {

@@ -26,7 +26,7 @@ class ResetPasswordRequest(BaseModel):
 async def list_users(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(
-        UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER,
+        UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER,
     ))],
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -80,7 +80,7 @@ async def get_user(
     user_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(
-        UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER,
+        UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER,
     ))],
 ):
     """Get a user by ID."""

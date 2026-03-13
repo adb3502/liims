@@ -89,7 +89,7 @@ export function FreezerDetailPage() {
   const { data: boxes } = useBoxes({ freezer_id: id, per_page: 200 })
   const { data: tempData } = useTempEvents(id!, { per_page: 20 })
 
-  const canWrite = hasRole('super_admin', 'lab_manager', 'lab_technician')
+  const canWrite = hasRole('super_admin', 'lii_pi_researcher', 'scientist')
 
   if (isLoading) return <PageSpinner />
 

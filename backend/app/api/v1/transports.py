@@ -21,8 +21,8 @@ async def create_transport(
     data: TransportCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(
-        UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER,
-        UserRole.LAB_TECHNICIAN, UserRole.FIELD_COORDINATOR,
+        UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER,
+        UserRole.SCIENTIST, UserRole.FIELD_OPERATIVE,
     ))],
 ):
     """Record a sample transport."""
@@ -38,8 +38,8 @@ async def create_transport(
 async def list_transports(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(
-        UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER,
-        UserRole.LAB_TECHNICIAN, UserRole.FIELD_COORDINATOR,
+        UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER,
+        UserRole.SCIENTIST, UserRole.FIELD_OPERATIVE,
     ))],
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),

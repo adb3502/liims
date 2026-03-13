@@ -141,7 +141,7 @@ export function SampleListPage() {
     }
   }
 
-  const canRegister = hasRole('super_admin', 'lab_manager', 'lab_technician', 'field_coordinator')
+  const canRegister = hasRole('super_admin', 'lii_pi_researcher', 'scientist', 'field_operative')
 
   function formatVolume(remaining: number | null, initial: number | null): string {
     if (remaining == null && initial == null) return '---'

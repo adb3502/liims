@@ -6,11 +6,13 @@
 
 export type UserRole =
   | 'super_admin'
-  | 'lab_manager'
-  | 'lab_technician'
-  | 'field_coordinator'
-  | 'data_entry'
-  | 'collaborator'
+  | 'lii_pi_researcher'
+  | 'scientist'
+  | 'icmr_car_jrf'
+  | 'icmr_car_postdoc'
+  | 'field_operative'
+  | 'clinical_team'
+  | 'clinical_partner'
   | 'pi_researcher'
 
 export type AgeGroup = 1 | 2 | 3 | 4 | 5
@@ -147,6 +149,116 @@ export interface AuthMe {
   user: User
 }
 
+// --- Clinical Data ---
+
+export interface ClinicalDataDemographics {
+  age?: number | null
+  gender?: string | null
+  dob?: string | null
+  language?: string | null
+  pin_code?: string | null
+  residential_area?: string | null
+  living_arrangement?: string | null
+  marital_status?: string | null
+  religion?: string | null
+  education?: string | null
+  occupation?: string | null
+  monthly_income?: string | null
+  socioeconomic_status?: string | null
+  no_of_family_members?: number | null
+}
+
+export interface ClinicalDataVitals {
+  pulse_rate?: number | null
+  bp_sbp?: number | null
+  bp_dbp?: number | null
+  resp_rate?: number | null
+  spo2?: number | null
+  temperature?: number | null
+}
+
+export interface ClinicalDataAnthropometry {
+  height_cm?: number | null
+  weight_kg?: number | null
+  bmi?: number | null
+}
+
+export interface ClinicalDataScores {
+  dass_depression?: number | null
+  dass_anxiety?: number | null
+  dass_stress?: number | null
+  dass_total?: number | null
+  depression_level?: string | null
+  anxiety_level?: string | null
+  stress_level?: string | null
+  mmse_total?: number | null
+  frail_score?: number | null
+  frail_category?: string | null
+  sleep_hours?: number | null
+  sleep_latency?: number | null
+}
+
+export interface ClinicalDataComorbidities {
+  dm?: boolean | null
+  dm_type?: string | null
+  dm_duration?: string | null
+  htn?: boolean | null
+  htn_duration?: string | null
+  bronchial_asthma?: boolean | null
+  ihd?: boolean | null
+  hypothyroid?: boolean | null
+  epilepsy?: boolean | null
+  psychiatric?: boolean | null
+  covid_history?: boolean | null
+  covid_vaccinated?: boolean | null
+  covid_doses?: number | null
+  other?: string | null
+}
+
+export interface ClinicalDataLifestyle {
+  dietary_pattern?: string | null
+  bowel_frequency?: string | null
+  water_per_day?: string | null
+  probiotics_use?: boolean | null
+  supplement_use?: boolean | null
+  exercise?: string | null
+}
+
+export interface ClinicalDataAddiction {
+  smoking_status?: string | null
+  smokeless_status?: string | null
+  alcohol_status?: string | null
+  passive_smoke?: boolean | null
+}
+
+export interface ClinicalDataFamilyHistory {
+  dm?: boolean | null
+  ihd?: boolean | null
+  cancer?: boolean | null
+  neurodegenerative?: boolean | null
+}
+
+export interface ClinicalDataFemaleSpecific {
+  menopausal_status?: string | null
+  lmp?: string | null
+  pcos_history?: boolean | null
+}
+
+export interface ClinicalData {
+  demographics?: ClinicalDataDemographics | null
+  vitals?: ClinicalDataVitals | null
+  anthropometry?: ClinicalDataAnthropometry | null
+  comorbidities?: ClinicalDataComorbidities | null
+  family_history?: ClinicalDataFamilyHistory | null
+  addiction?: ClinicalDataAddiction | null
+  lifestyle?: ClinicalDataLifestyle | null
+  scores?: ClinicalDataScores | null
+  systemic?: Record<string, unknown> | null
+  head_to_toe?: Record<string, unknown> | null
+  who_qol?: Record<string, unknown> | null
+  female_specific?: ClinicalDataFemaleSpecific | null
+}
+
 // --- Participant ---
 
 export interface Participant {
@@ -167,8 +279,12 @@ export interface Participant {
   created_at: string
   updated_at: string
   created_by: string
-  // Joined
+  // Computed / joined
   collection_site?: CollectionSite
+  clinical_data?: ClinicalData | null
+  computed_age?: number | null
+  age_source?: 'dob_enrollment' | 'dob_blood' | 'blood_import' | 'odk' | 'unknown' | null
+  age_group_mismatch?: boolean
 }
 
 export interface ParticipantCreate {

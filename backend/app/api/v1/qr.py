@@ -22,13 +22,13 @@ from app.services.qr_code import generate_batch_qr, generate_sample_qr
 router = APIRouter(prefix="/qr", tags=["qr-codes"])
 
 ALL_ROLES = (
-    UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER, UserRole.LAB_TECHNICIAN,
-    UserRole.FIELD_COORDINATOR, UserRole.DATA_ENTRY,
-    UserRole.COLLABORATOR, UserRole.PI_RESEARCHER,
+    UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER, UserRole.SCIENTIST,
+    UserRole.FIELD_OPERATIVE, UserRole.ICMR_CAR_JRF,
+    UserRole.PI_RESEARCHER,
 )
 WRITE_ROLES = (
-    UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER, UserRole.LAB_TECHNICIAN,
-    UserRole.FIELD_COORDINATOR,
+    UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER, UserRole.SCIENTIST,
+    UserRole.FIELD_OPERATIVE,
 )
 
 

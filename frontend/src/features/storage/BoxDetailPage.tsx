@@ -99,7 +99,7 @@ export function BoxDetailPage() {
   const [showUnassignDialog, setShowUnassignDialog] = useState(false)
 
   const { data: box, isLoading, isError } = useBoxDetail(id ?? '')
-  const canWrite = hasRole('super_admin', 'lab_manager', 'lab_technician')
+  const canWrite = hasRole('super_admin', 'lii_pi_researcher', 'scientist')
 
   // Build the grid map: [row][col] -> position
   const grid = useMemo(() => {

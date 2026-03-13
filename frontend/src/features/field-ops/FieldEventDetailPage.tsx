@@ -73,7 +73,7 @@ export function FieldEventDetailPage() {
   const updateMutation = useUpdateFieldEvent(id!)
   const checkInMutation = useCheckInParticipant(id!)
 
-  const canWrite = hasRole('super_admin', 'lab_manager', 'field_coordinator')
+  const canWrite = hasRole('super_admin', 'lii_pi_researcher', 'field_operative')
 
   if (isLoading) return <PageSpinner />
 

@@ -90,7 +90,7 @@ async def update_site(
     data: CollectionSiteUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(
-        UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER,
+        UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER,
     ))],
 ):
     """Update a collection site."""

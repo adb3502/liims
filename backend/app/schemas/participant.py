@@ -82,6 +82,10 @@ class ParticipantRead(BaseModel):
     completion_pct: Decimal
     created_at: datetime
     updated_at: datetime
+    # Computed age fields — populated by the API layer, not stored in the DB
+    computed_age: int | None = None
+    age_source: str | None = None   # "dob_enrollment" | "odk" | "unknown"
+    age_group_mismatch: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -91,6 +95,7 @@ class ParticipantDetail(ParticipantRead):
     consents: list["ConsentRead"] = []
     sample_counts: dict = {}  # {"plasma": 3, "epigenetics": 4, ...}
     collection_site: CollectionSiteRead | None = None
+    clinical_data: dict | None = None
 
 
 # --- Consent ---

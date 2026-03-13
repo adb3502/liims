@@ -21,9 +21,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/data-explorer", tags=["data-explorer"])
 
 ALL_ROLES = (
-    UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER, UserRole.LAB_TECHNICIAN,
-    UserRole.FIELD_COORDINATOR, UserRole.DATA_ENTRY,
-    UserRole.COLLABORATOR, UserRole.PI_RESEARCHER,
+    UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER, UserRole.SCIENTIST,
+    UserRole.ICMR_CAR_JRF, UserRole.ICMR_CAR_POSTDOC,
+    UserRole.FIELD_OPERATIVE, UserRole.CLINICAL_TEAM,
+    UserRole.CLINICAL_PARTNER, UserRole.PI_RESEARCHER,
 )
 
 # Clinical parameters extracted from the ODK clinical_data JSONB
@@ -45,6 +46,22 @@ CLINICAL_PARAMETERS = [
 ]
 
 CLINICAL_PARAM_MAP = {p["name"]: p for p in CLINICAL_PARAMETERS}
+
+# Categorical metadata fields from clinical_data JSONB for stratification/group_by
+METADATA_STRATA = [
+    {"name": "dietary_pattern", "display_name": "Dietary Pattern", "category": "Lifestyle", "path": ["lifestyle", "dietary_pattern"]},
+    {"name": "exercise_group", "display_name": "Exercise Group", "category": "Lifestyle", "path": ["lifestyle", "exercise"]},
+    {"name": "smoking_status", "display_name": "Smoking Status", "category": "Addiction", "path": ["addiction", "smoking_status"]},
+    {"name": "alcohol_status", "display_name": "Alcohol Status", "category": "Addiction", "path": ["addiction", "alcohol_status"]},
+    {"name": "residential_area", "display_name": "Residential Area", "category": "Demographics", "path": ["demographics", "residential_area"]},
+    {"name": "education", "display_name": "Education Level", "category": "Demographics", "path": ["demographics", "education"]},
+    {"name": "occupation", "display_name": "Occupation", "category": "Demographics", "path": ["demographics", "occupation"]},
+    {"name": "marital_status", "display_name": "Marital Status", "category": "Demographics", "path": ["demographics", "marital_status"]},
+    {"name": "socioeconomic_status", "display_name": "Socioeconomic Status", "category": "Demographics", "path": ["demographics", "socioeconomic_status"]},
+    {"name": "depression_level", "display_name": "Depression Level", "category": "Scores", "path": ["scores", "depression_level"]},
+    {"name": "frail_category", "display_name": "Frailty Category", "category": "Scores", "path": ["scores", "frail_category"]},
+]
+METADATA_STRATA_MAP = {s["name"]: s for s in METADATA_STRATA}
 
 
 # --- Response schemas ---
@@ -381,6 +398,29 @@ async def get_parameters(
     return {"success": True, "data": parameters}
 
 
+@router.get("/strata", response_model=dict)
+async def get_strata(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
+):
+    """Return list of categorical metadata fields available for stratification.
+
+    These correspond to JSONB paths in the participant clinical_data column and
+    can be passed as the ``strata`` parameter on the /distribution endpoint.
+    """
+    return {
+        "success": True,
+        "data": [
+            {
+                "name": s["name"],
+                "display_name": s["display_name"],
+                "category": s["category"],
+            }
+            for s in METADATA_STRATA
+        ],
+    }
+
+
 # Maps participant code letter to display label for group_by=sex
 _AGE_GROUP_LABELS = {
     1: "18-29", 2: "30-44", 3: "45-59", 4: "60-74", 5: "75+",
@@ -440,16 +480,26 @@ async def get_distribution(
     sex: str | None = Query(None, description="Comma-separated sex codes (M,F or A,B)"),
     site: str | None = Query(None, description="Comma-separated collection site codes"),
     group_by: str | None = Query(None, description="Group results by: age_group, sex, site"),
+    strata: str | None = Query(None, description="Stratify by a categorical metadata field (see /strata)"),
 ):
     """Return data points for distribution charts with descriptive statistics.
 
     When group_by is provided, groups the data and returns per-group stats
     including raw values arrays for box plots.
+
+    When strata is provided (a key from /strata), groups results by that
+    categorical JSONB field and returns per-stratum stats with raw values.
+    strata takes precedence over group_by when both are supplied.
     """
     if group_by is not None and group_by not in _VALID_GROUP_BY:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             f"Invalid group_by value. Must be one of: {', '.join(sorted(_VALID_GROUP_BY))}",
+        )
+    if strata is not None and strata not in METADATA_STRATA_MAP:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Invalid strata value '{strata}'. See /data-explorer/strata for valid options.",
         )
 
     age_group_enums, sex_enums, site_codes = _parse_cohort_filters(age_group, sex, site)
@@ -459,25 +509,37 @@ async def get_distribution(
     unit: str | None = None
 
     data_points: list[DataPoint] = []
+    # strata_values[i] is the strata label for data_points[i] when strata is set
+    strata_values: list[str | None] = []
 
     if is_clinical:
         cp = CLINICAL_PARAM_MAP[parameter]
         unit = cp["unit"]
         path = cp["path"]
 
-        # Build query: extract JSONB value from clinical_data
+        # Build JSONB expression for the numeric parameter
         json_expr = Participant.clinical_data
         for key in path:
             json_expr = json_expr[key]
 
+        select_cols = [
+            json_expr.as_string().label("value_str"),
+            Participant.age_group,
+            Participant.sex,
+            Participant.participant_code,
+            CollectionSite.code.label("site_code"),
+        ]
+
+        # When strata is requested, also extract the strata JSONB text in the query
+        if strata:
+            strata_def = METADATA_STRATA_MAP[strata]
+            strata_expr = func.jsonb_extract_path_text(
+                Participant.clinical_data, *strata_def["path"]
+            ).label("strata_value")
+            select_cols.append(strata_expr)
+
         query = (
-            select(
-                json_expr.as_string().label("value_str"),
-                Participant.age_group,
-                Participant.sex,
-                Participant.participant_code,
-                CollectionSite.code.label("site_code"),
-            )
+            select(*select_cols)
             .join(CollectionSite, Participant.collection_site_id == CollectionSite.id)
             .where(
                 Participant.is_deleted == False,  # noqa: E712
@@ -510,6 +572,8 @@ async def get_distribution(
                 )
                 data_points.append(dp)
                 values_for_stats.append(val)
+                if strata:
+                    strata_values.append(row.strata_value)
 
     else:
         # Lab test parameter - query from partner_lab_result via canonical_test
@@ -525,14 +589,23 @@ async def get_distribution(
 
         unit = canonical_test.standard_unit
 
+        select_cols = [
+            PartnerLabResult.test_value,
+            Participant.age_group,
+            Participant.sex,
+            Participant.participant_code,
+            CollectionSite.code.label("site_code"),
+        ]
+
+        if strata:
+            strata_def = METADATA_STRATA_MAP[strata]
+            strata_expr = func.jsonb_extract_path_text(
+                Participant.clinical_data, *strata_def["path"]
+            ).label("strata_value")
+            select_cols.append(strata_expr)
+
         query = (
-            select(
-                PartnerLabResult.test_value,
-                Participant.age_group,
-                Participant.sex,
-                Participant.participant_code,
-                CollectionSite.code.label("site_code"),
-            )
+            select(*select_cols)
             .join(Participant, PartnerLabResult.participant_id == Participant.id)
             .join(CollectionSite, Participant.collection_site_id == CollectionSite.id)
             .where(
@@ -566,6 +639,8 @@ async def get_distribution(
                 )
                 data_points.append(dp)
                 values_for_stats.append(val)
+                if strata:
+                    strata_values.append(row.strata_value)
 
     stats = _compute_stats(values_for_stats)
 
@@ -576,7 +651,32 @@ async def get_distribution(
         "stats": stats.model_dump(),
     }
 
-    if group_by:
+    if strata:
+        # Group by strata value in Python; null strata values are bucketed as "unknown"
+        strata_groups: dict[str, list[float]] = {}
+        for dp, sv in zip(data_points, strata_values):
+            key = sv if sv is not None else "unknown"
+            strata_groups.setdefault(key, []).append(dp.value)
+
+        groups_out = []
+        for group_key, vals in sorted(strata_groups.items()):
+            g_stats = _compute_stats(vals)
+            groups_out.append({
+                "group": group_key,
+                "label": group_key,
+                "n": g_stats.n,
+                "mean": g_stats.mean,
+                "median": g_stats.median,
+                "sd": g_stats.sd,
+                "min": g_stats.min,
+                "max": g_stats.max,
+                "q1": g_stats.q1,
+                "q3": g_stats.q3,
+                "values": vals,
+            })
+        response_data["groups"] = groups_out
+        response_data["strata"] = strata
+    elif group_by:
         response_data["groups"] = _compute_grouped_stats(data_points, group_by)
 
     return {"success": True, "data": response_data}
@@ -1109,3 +1209,143 @@ async def get_cohort_counts(
         result["filtered_total"] = filtered_total
 
     return {"success": True, "data": result}
+
+
+@router.get("/metadata-table", response_model=dict)
+async def get_metadata_table(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_role(*ALL_ROLES))],
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+    age_group: str | None = Query(None, description="Comma-separated age groups (1-5)"),
+    sex: str | None = Query(None, description="Comma-separated sex codes (M,F or A,B)"),
+    site: str | None = Query(None, description="Comma-separated collection site codes"),
+):
+    """Return a paginated, flattened table of participant metadata + clinical fields.
+
+    Each row combines core participant fields with demographic, lifestyle, and
+    clinical score fields extracted from the clinical_data JSONB column.
+    Participants without clinical_data are included with null values for those fields.
+
+    Supports the same age_group, sex, and site cohort filters as other endpoints.
+    staleTime: 5 minutes (clinical data does not change frequently).
+    """
+    age_group_enums, sex_enums, site_codes = _parse_cohort_filters(age_group, sex, site)
+
+    # Compute age from date_of_birth vs enrollment_date in SQL to avoid N+1 fetches
+    # age = (enrollment_date::date - date_of_birth) / 365 using EXTRACT(YEAR FROM age(...))
+    # We use a Python fallback in the row loop for ODK-sourced ages to keep SQL simple.
+    base_query = (
+        select(
+            Participant.participant_code,
+            CollectionSite.code.label("site_code"),
+            Participant.age_group,
+            Participant.sex,
+            Participant.date_of_birth,
+            Participant.enrollment_date,
+            Participant.clinical_data,
+        )
+        .join(CollectionSite, Participant.collection_site_id == CollectionSite.id)
+        .where(Participant.is_deleted == False)  # noqa: E712
+        .order_by(Participant.participant_code)
+    )
+
+    if age_group_enums:
+        base_query = base_query.where(Participant.age_group.in_(age_group_enums))
+    if sex_enums:
+        base_query = base_query.where(Participant.sex.in_(sex_enums))
+    if site_codes:
+        base_query = base_query.where(CollectionSite.code.in_(site_codes))
+
+    # Count total matching rows
+    count_query = select(func.count()).select_from(base_query.subquery())
+    total: int = (await db.execute(count_query)).scalar() or 0
+
+    # Paginate
+    offset = (page - 1) * per_page
+    paged_query = base_query.offset(offset).limit(per_page)
+    rows = (await db.execute(paged_query)).all()
+
+    _sex_letter = {"M": "M", "F": "F", "MALE": "M", "FEMALE": "F"}
+
+    data: list[dict] = []
+    for row in rows:
+        age_group_int = row.age_group.value if hasattr(row.age_group, "value") else int(row.age_group)
+        raw_sex = row.sex.value if hasattr(row.sex, "value") else row.sex
+        sex_str = _sex_letter.get(str(raw_sex).upper(), raw_sex)
+
+        # Compute age
+        computed_age: int | None = None
+        cd = row.clinical_data if isinstance(row.clinical_data, dict) else {}
+
+        if row.date_of_birth is not None:
+            delta_days = (row.enrollment_date.date() - row.date_of_birth).days
+            computed_age = delta_days // 365
+        else:
+            demographics = cd.get("demographics")
+            if isinstance(demographics, dict):
+                raw_age = demographics.get("age")
+                if raw_age is not None:
+                    try:
+                        computed_age = int(raw_age)
+                    except (ValueError, TypeError):
+                        pass
+
+        # Extract nested JSONB sections with safe fallbacks
+        vitals = cd.get("vitals") or {}
+        anthro = cd.get("anthropometry") or {}
+        scores = cd.get("scores") or {}
+        lifestyle = cd.get("lifestyle") or {}
+        addiction = cd.get("addiction") or {}
+        demographics = cd.get("demographics") or {}
+
+        def _safe_str(v) -> str | None:
+            return str(v).strip() if v is not None else None
+
+        row_data: dict = {
+            "participant_code": row.participant_code,
+            "site_code": row.site_code,
+            "age_group": age_group_int,
+            "sex": sex_str,
+            "computed_age": computed_age,
+            # Demographics
+            "residential_area": _safe_str(demographics.get("residential_area")),
+            "education": _safe_str(demographics.get("education")),
+            "occupation": _safe_str(demographics.get("occupation")),
+            "marital_status": _safe_str(demographics.get("marital_status")),
+            "socioeconomic_status": _safe_str(demographics.get("socioeconomic_status")),
+            # Lifestyle / addiction
+            "dietary_pattern": _safe_str(lifestyle.get("dietary_pattern")),
+            "exercise": _safe_str(lifestyle.get("exercise")),
+            "smoking_status": _safe_str(addiction.get("smoking_status")),
+            "alcohol_status": _safe_str(addiction.get("alcohol_status")),
+            # Vitals
+            "bp_sbp": _safe_float(vitals.get("bp_sbp")),
+            "bp_dbp": _safe_float(vitals.get("bp_dbp")),
+            "pulse_rate": _safe_float(vitals.get("pulse")),
+            # Anthropometry
+            "height_cm": _safe_float(anthro.get("height_cm")),
+            "weight_kg": _safe_float(anthro.get("weight_kg")),
+            "bmi": _safe_float(anthro.get("bmi")),
+            # Scores
+            "dass_depression": _safe_float(scores.get("dass_depression")),
+            "dass_anxiety": _safe_float(scores.get("dass_anxiety")),
+            "dass_stress": _safe_float(scores.get("dass_stress")),
+            "mmse_total": _safe_float(scores.get("mmse_total")),
+            "frail_score": _safe_float(scores.get("frail_score")),
+            "frail_category": _safe_str(scores.get("frail_category")),
+        }
+        data.append(row_data)
+
+    total_pages = math.ceil(total / per_page) if per_page > 0 else 0
+
+    return {
+        "success": True,
+        "data": data,
+        "meta": {
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": total_pages,
+        },
+    }

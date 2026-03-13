@@ -26,6 +26,7 @@ import {
   useDataExplorerCorrelation,
   useDataExplorerScatter,
   useDataExplorerCounts,
+  useDataExplorerStrata,
   type DataExplorerFilters,
   type ParameterMeta,
   type CohortCounts,
@@ -940,7 +941,10 @@ function DistributionTab({
   const [removeOutliers, setRemoveOutliers] = useState(true)
   const [showGridlines, setShowGridlines] = useState(false)
   const [showExport, setShowExport] = useState(false)
+  const [strataBy, setStrataBy] = useState('')
   const plotContainerRef = useRef<HTMLDivElement>(null)
+
+  const { data: strataOptions } = useDataExplorerStrata()
 
   // For violin/box/density we always fetch with chartType='box' to get raw values
   const fetchType = chartType === 'histogram' ? 'histogram' : 'box'
@@ -953,6 +957,7 @@ function DistributionTab({
     apiGroupBy as 'age_group' | 'sex' | 'site',
     filters,
     !!parameter,
+    strataBy || undefined,
   )
 
   // For site_type grouping, re-derive groups from rawData by Urban/Rural
@@ -1228,7 +1233,7 @@ function DistributionTab({
 
   return (
     <div className="space-y-4">
-      {/* Controls row 1: parameter, chart type, group by */}
+      {/* Controls row 1: parameter, chart type, group by + stratify by */}
       <div className="grid gap-3 sm:grid-cols-3">
         <ParameterSelect
           parameters={parameters}
@@ -1273,6 +1278,26 @@ function DistributionTab({
           ))}
         </div>
       </div>
+
+      {/* Stratify by */}
+      {strataOptions && strataOptions.length > 0 && (
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-gray-400 uppercase tracking-wider" htmlFor="strata-by-select">
+            Stratify by
+          </label>
+          <select
+            id="strata-by-select"
+            value={strataBy}
+            onChange={(e) => setStrataBy(e.target.value)}
+            className="w-full h-9 rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
+          >
+            <option value="">None</option>
+            {strataOptions.map((s) => (
+              <option key={s.name} value={s.name}>{s.display_name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Controls row 2: color by, palette + checkboxes */}
       <div className="flex flex-wrap items-center gap-4">

@@ -4,12 +4,12 @@ import logging
 import math
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +17,7 @@ from app.core.deps import require_role
 from app.database import get_db
 from app.models.enums import AgeGroup, AuditAction, EnrollmentSource, Sex, UserRole
 from app.models.participant import CollectionSite, Participant
+from app.models.partner import PartnerLabResult
 from app.models.user import AuditLog, User
 from app.schemas.participant import (
     ConsentCreate,
@@ -53,16 +54,76 @@ class BulkCreateRequest(BaseModel):
 
 router = APIRouter(prefix="/participants", tags=["participants"])
 
+# Age group expected ranges: age_group digit -> (min_age_inclusive, max_age_inclusive)
+_AGE_GROUP_RANGES: dict[int, tuple[int, int]] = {
+    1: (18, 29),
+    2: (30, 44),
+    3: (45, 59),
+    4: (60, 74),
+    5: (75, 999),
+}
+
+
+def _compute_participant_age(
+    date_of_birth: date | None,
+    enrollment_date: datetime,
+    clinical_data: dict | None,
+    age_group_value: int,
+    blood_test_date: date | None = None,
+    blood_test_age: int | None = None,
+) -> tuple[int | None, str | None, bool]:
+    """Compute age and mismatch flag for a participant.
+
+    Priority chain:
+    1. DOB → blood_test_date (most accurate: age at time of blood draw)
+    2. DOB → enrollment_date (proxy when no test date)
+    3. blood_test_age from import (age recorded in CSV, no DOB needed)
+    4. ODK age from clinical_data
+
+    Returns (computed_age, age_source, age_group_mismatch).
+    """
+    computed_age: int | None = None
+    age_source: str | None = None
+
+    if date_of_birth is not None:
+        ref_date = blood_test_date if blood_test_date is not None else enrollment_date.date()
+        delta_days = (ref_date - date_of_birth).days
+        computed_age = delta_days // 365
+        age_source = "dob_blood" if blood_test_date is not None else "dob_enrollment"
+    elif blood_test_age is not None:
+        computed_age = blood_test_age
+        age_source = "blood_import"
+    elif clinical_data and isinstance(clinical_data, dict):
+        demographics = clinical_data.get("demographics")
+        if isinstance(demographics, dict):
+            raw_age = demographics.get("age")
+            if raw_age is not None:
+                try:
+                    computed_age = int(raw_age)
+                    age_source = "odk"
+                except (ValueError, TypeError):
+                    pass
+
+    age_group_mismatch = False
+    if computed_age is not None:
+        lo, hi = _AGE_GROUP_RANGES.get(age_group_value, (0, 999))
+        age_group_mismatch = not (lo <= computed_age <= hi)
+
+    return computed_age, age_source, age_group_mismatch
+
+
 # Roles allowed to create participants
 CREATE_ROLES = (
-    UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER,
-    UserRole.DATA_ENTRY, UserRole.FIELD_COORDINATOR,
+    UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER,
+    UserRole.ICMR_CAR_JRF, UserRole.ICMR_CAR_POSTDOC,
+    UserRole.FIELD_OPERATIVE, UserRole.CLINICAL_TEAM,
 )
 # Roles allowed to view participants
 VIEW_ROLES = (
-    UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER, UserRole.LAB_TECHNICIAN,
-    UserRole.DATA_ENTRY, UserRole.FIELD_COORDINATOR,
-    UserRole.COLLABORATOR, UserRole.PI_RESEARCHER,
+    UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER, UserRole.SCIENTIST,
+    UserRole.ICMR_CAR_JRF, UserRole.ICMR_CAR_POSTDOC,
+    UserRole.FIELD_OPERATIVE, UserRole.CLINICAL_TEAM,
+    UserRole.CLINICAL_PARTNER, UserRole.PI_RESEARCHER,
 )
 
 
@@ -88,12 +149,22 @@ async def list_participants(
         age_group=age_group, sex=sex, wave=wave,
         sort=sort, order=order,
     )
+
+    serialized = []
+    for p in participants:
+        read = ParticipantRead.model_validate(p)
+        age_group_int = p.age_group.value if hasattr(p.age_group, "value") else int(p.age_group)
+        c_age, a_src, a_mismatch = _compute_participant_age(
+            p.date_of_birth, p.enrollment_date, p.clinical_data, age_group_int,
+        )
+        read.computed_age = c_age
+        read.age_source = a_src
+        read.age_group_mismatch = a_mismatch
+        serialized.append(read.model_dump(mode="json"))
+
     return {
         "success": True,
-        "data": [
-            ParticipantRead.model_validate(p).model_dump(mode="json")
-            for p in participants
-        ],
+        "data": serialized,
         "meta": {
             "page": page,
             "per_page": per_page,
@@ -275,6 +346,30 @@ async def get_participant(
         for c in participant.consents
         if not c.is_deleted
     ]
+    detail.clinical_data = participant.clinical_data
+
+    # Fetch earliest blood test date and recorded age for this participant
+    blood_row = (await db.execute(
+        select(
+            func.min(PartnerLabResult.test_date),
+            func.max(PartnerLabResult.raw_data["age_at_test"].as_integer()),
+        ).where(PartnerLabResult.participant_id == participant_id)
+    )).one()
+    blood_test_date: date | None = blood_row[0]
+    blood_test_age: int | None = blood_row[1]
+
+    age_group_int = participant.age_group.value if hasattr(participant.age_group, "value") else int(participant.age_group)
+    c_age, a_src, a_mismatch = _compute_participant_age(
+        participant.date_of_birth,
+        participant.enrollment_date,
+        participant.clinical_data,
+        age_group_int,
+        blood_test_date=blood_test_date,
+        blood_test_age=blood_test_age,
+    )
+    detail.computed_age = c_age
+    detail.age_source = a_src
+    detail.age_group_mismatch = a_mismatch
 
     return {
         "success": True,
@@ -288,7 +383,7 @@ async def update_participant(
     data: ParticipantUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(
-        UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER, UserRole.DATA_ENTRY,
+        UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER, UserRole.ICMR_CAR_JRF,
     ))],
 ):
     """Update a participant."""
@@ -309,7 +404,7 @@ async def delete_participant(
     participant_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(
-        UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER,
+        UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER,
     ))],
 ):
     """Soft-delete a participant (manager+ only)."""
@@ -369,7 +464,7 @@ async def update_consent(
     data: ConsentUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(
-        UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER, UserRole.DATA_ENTRY,
+        UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER, UserRole.ICMR_CAR_JRF,
     ))],
 ):
     """Update a consent record (e.g., record withdrawal)."""

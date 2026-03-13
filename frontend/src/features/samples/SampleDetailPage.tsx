@@ -132,7 +132,7 @@ export function SampleDetailPage() {
   const [discardReason, setDiscardReason] = useState('')
   const [discardNotes, setDiscardNotes] = useState('')
 
-  const canWrite = hasRole('super_admin', 'lab_manager', 'lab_technician', 'field_coordinator')
+  const canWrite = hasRole('super_admin', 'lii_pi_researcher', 'scientist', 'field_operative')
 
   if (isLoading) return <PageSpinner />
 

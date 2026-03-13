@@ -199,8 +199,8 @@ class DashboardService:
             ]
 
         # Urban vs Rural: derive from site code
-        urban_sites = {"BBH", "RMH", "CHAF", "BMC", "JSS"}
-        rural_sites = {"SSSSMH"}
+        urban_sites = {"RMH", "CHAF", "BMC", "JSS"}
+        rural_sites = {"SSSSMH", "BBH"}
         urban_count = sum(s["count"] for s in by_site if s["site_code"] in urban_sites)
         rural_count = sum(s["count"] for s in by_site if s["site_code"] in rural_sites)
 

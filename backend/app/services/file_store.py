@@ -363,7 +363,7 @@ class WatchDirectoryService:
             # Create notification for new discoveries
             self.db.add(Notification(
                 id=uuid.uuid4(),
-                recipient_role=UserRole.LAB_MANAGER,
+                recipient_role=UserRole.LII_PI_RESEARCHER,
                 notification_type=NotificationType.FILE_DISCOVERED,
                 title=f"{len(ingested)} new file(s) discovered",
                 message=(

@@ -40,7 +40,7 @@ const navigation: NavItem[] = [
       {
         label: 'Create',
         path: '/participants/create',
-        roles: ['super_admin', 'lab_manager', 'data_entry', 'field_coordinator'],
+        roles: ['super_admin', 'lii_pi_researcher', 'icmr_car_jrf', 'icmr_car_postdoc', 'field_operative', 'clinical_team'],
       },
       { label: 'ODK Sync', path: '/participants/odk-sync' },
     ],
@@ -70,7 +70,7 @@ const navigation: NavItem[] = [
     label: 'Field Operations',
     path: '/field-ops',
     icon: <MapPin className="h-5 w-5" />,
-    roles: ['super_admin', 'lab_manager', 'field_coordinator', 'data_entry', 'pi_researcher'],
+    roles: ['super_admin', 'lii_pi_researcher', 'icmr_car_jrf', 'icmr_car_postdoc', 'field_operative', 'clinical_team', 'pi_researcher'],
     children: [
       { label: 'Events', path: '/field-ops/events' },
       { label: 'Conflicts', path: '/field-ops/conflicts' },
@@ -92,7 +92,7 @@ const navigation: NavItem[] = [
     label: 'Instruments',
     path: '/instruments',
     icon: <Microscope className="h-5 w-5" />,
-    roles: ['super_admin', 'lab_manager', 'lab_technician', 'pi_researcher'],
+    roles: ['super_admin', 'lii_pi_researcher', 'scientist', 'icmr_car_jrf', 'icmr_car_postdoc', 'pi_researcher'],
     children: [
       { label: 'Dashboard', path: '/instruments' },
       { label: 'Queue', path: '/instruments/queue' },
@@ -109,6 +109,7 @@ const navigation: NavItem[] = [
     children: [
       { label: 'Overview', path: '/reports/enrollment' },
       { label: 'BHARAT Data', path: '/reports/data-explorer' },
+      { label: 'Metadata Explorer', path: '/reports/metadata-explorer' },
       { label: 'Inventory', path: '/reports/inventory' },
       { label: 'Quality', path: '/reports/quality' },
       { label: 'Sites', path: '/reports/sites' },
@@ -124,7 +125,7 @@ const navigation: NavItem[] = [
     label: 'Admin',
     path: '/admin',
     icon: <Shield className="h-5 w-5" />,
-    roles: ['super_admin', 'lab_manager'],
+    roles: ['super_admin', 'lii_pi_researcher'],
     children: [
       { label: 'Users', path: '/admin/users' },
       { label: 'Audit Logs', path: '/admin/audit-logs' },

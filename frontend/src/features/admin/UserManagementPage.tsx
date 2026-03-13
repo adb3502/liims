@@ -42,31 +42,37 @@ const PER_PAGE = 25
 
 const USER_ROLE_LABELS: Record<UserRole, string> = {
   super_admin: 'Super Admin',
-  lab_manager: 'Lab Manager',
-  lab_technician: 'Lab Technician',
-  field_coordinator: 'Field Coordinator',
-  data_entry: 'Data Entry',
-  collaborator: 'Collaborator',
-  pi_researcher: 'PI Researcher',
+  lii_pi_researcher: 'LII PI/Researcher',
+  scientist: 'Scientist',
+  icmr_car_jrf: 'ICMR-CAR JRF',
+  icmr_car_postdoc: 'ICMR-CAR Postdoc',
+  field_operative: 'Field Operative',
+  clinical_team: 'Clinical Team',
+  clinical_partner: 'Clinical Partner',
+  pi_researcher: 'PI/Researcher',
 }
 
 const ALL_ROLES: UserRole[] = [
   'super_admin',
-  'lab_manager',
-  'lab_technician',
-  'field_coordinator',
-  'data_entry',
-  'collaborator',
+  'lii_pi_researcher',
+  'scientist',
+  'icmr_car_jrf',
+  'icmr_car_postdoc',
+  'field_operative',
+  'clinical_team',
+  'clinical_partner',
   'pi_researcher',
 ]
 
 const ROLE_BADGE_COLORS: Record<UserRole, 'default' | 'success' | 'warning' | 'destructive' | 'secondary'> = {
   super_admin: 'destructive',
-  lab_manager: 'warning',
-  lab_technician: 'default',
-  field_coordinator: 'default',
-  data_entry: 'secondary',
-  collaborator: 'secondary',
+  lii_pi_researcher: 'warning',
+  scientist: 'default',
+  icmr_car_jrf: 'default',
+  icmr_car_postdoc: 'default',
+  field_operative: 'secondary',
+  clinical_team: 'secondary',
+  clinical_partner: 'secondary',
   pi_researcher: 'success',
 }
 
@@ -84,11 +90,13 @@ const userCreateSchema = z.object({
   full_name: z.string().min(1, 'Name is required').max(200),
   role: z.enum([
     'super_admin',
-    'lab_manager',
-    'lab_technician',
-    'field_coordinator',
-    'data_entry',
-    'collaborator',
+    'lii_pi_researcher',
+    'scientist',
+    'icmr_car_jrf',
+    'icmr_car_postdoc',
+    'field_operative',
+    'clinical_team',
+    'clinical_partner',
     'pi_researcher',
   ]),
   password: z.string().min(8, 'Password must be at least 8 characters'),
@@ -99,11 +107,13 @@ const userUpdateSchema = z.object({
   full_name: z.string().min(1, 'Name is required').max(200).optional(),
   role: z.enum([
     'super_admin',
-    'lab_manager',
-    'lab_technician',
-    'field_coordinator',
-    'data_entry',
-    'collaborator',
+    'lii_pi_researcher',
+    'scientist',
+    'icmr_car_jrf',
+    'icmr_car_postdoc',
+    'field_operative',
+    'clinical_team',
+    'clinical_partner',
     'pi_researcher',
   ]).optional(),
 })
@@ -173,7 +183,7 @@ export function UserManagementPage() {
   }
 
   const canManage = hasRole('super_admin')
-  const canView = hasRole('super_admin', 'lab_manager')
+  const canView = hasRole('super_admin', 'lii_pi_researcher')
 
   const {
     register: registerCreate,
@@ -184,7 +194,7 @@ export function UserManagementPage() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(userCreateSchema) as any,
     defaultValues: {
-      role: 'data_entry',
+      role: 'icmr_car_jrf',
     },
   })
 

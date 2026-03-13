@@ -57,7 +57,7 @@ export function OdkSyncPage() {
   const { data: syncLogs, isLoading: logsLoading } = useOdkSyncLogs({ per_page: 20 })
   const triggerSync = useTriggerOdkSync()
 
-  const canManage = hasRole('super_admin', 'lab_manager')
+  const canManage = hasRole('super_admin', 'lii_pi_researcher')
   const logs = syncLogs?.data ?? []
 
   async function handleTriggerSync(formId?: string) {

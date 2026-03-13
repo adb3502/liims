@@ -36,6 +36,7 @@ import { EnrollmentDashboardPage } from '@/features/reports/EnrollmentDashboardP
 import { InventoryDashboardPage } from '@/features/reports/InventoryDashboardPage'
 import { QualityDashboardPage } from '@/features/reports/QualityDashboardPage'
 import { DataExplorerPage } from '@/features/reports/DataExplorerPage'
+import { MetadataExplorerPage } from '@/features/reports/MetadataExplorerPage'
 import { QueryBuilderPage } from '@/features/reports/QueryBuilderPage'
 import { ReportGeneratorPage } from '@/features/reports/ReportGeneratorPage'
 import { FileManagerPage } from '@/features/files/FileManagerPage'
@@ -139,7 +140,7 @@ export const routes: RouteObject[] = [
           {
             path: 'create',
             element: (
-              <RoleGuard roles={['super_admin', 'lab_manager', 'data_entry', 'field_coordinator']}>
+              <RoleGuard roles={['super_admin', 'lii_pi_researcher', 'icmr_car_jrf', 'field_operative']}>
                 <ParticipantForm />
               </RoleGuard>
             ),
@@ -157,7 +158,7 @@ export const routes: RouteObject[] = [
           {
             path: 'register',
             element: (
-              <RoleGuard roles={['super_admin', 'lab_manager', 'lab_technician', 'field_coordinator']}>
+              <RoleGuard roles={['super_admin', 'lii_pi_researcher', 'scientist', 'field_operative']}>
                 <SampleRegisterForm />
               </RoleGuard>
             ),
@@ -187,9 +188,9 @@ export const routes: RouteObject[] = [
           <RoleGuard
             roles={[
               'super_admin',
-              'lab_manager',
-              'field_coordinator',
-              'data_entry',
+              'lii_pi_researcher',
+              'field_operative',
+              'icmr_car_jrf',
               'pi_researcher',
             ]}
           >
@@ -242,6 +243,7 @@ export const routes: RouteObject[] = [
           { path: 'data-availability', element: <ReportGeneratorPage /> },
           { path: 'quality', element: <QualityDashboardPage /> },
           { path: 'data-explorer', element: <DataExplorerPage /> },
+          { path: 'metadata-explorer', element: <MetadataExplorerPage /> },
           { path: 'query-builder', element: <QueryBuilderPage /> },
         ],
       },
@@ -250,7 +252,7 @@ export const routes: RouteObject[] = [
       {
         path: 'admin',
         element: (
-          <RoleGuard roles={['super_admin', 'lab_manager']}>
+          <RoleGuard roles={['super_admin', 'lii_pi_researcher']}>
             <Outlet />
           </RoleGuard>
         ),

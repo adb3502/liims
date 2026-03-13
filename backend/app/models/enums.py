@@ -118,11 +118,13 @@ class BoxMaterial(str, enum.Enum):
 
 class UserRole(str, enum.Enum):
     SUPER_ADMIN = "super_admin"
-    LAB_MANAGER = "lab_manager"
-    LAB_TECHNICIAN = "lab_technician"
-    FIELD_COORDINATOR = "field_coordinator"
-    DATA_ENTRY = "data_entry"
-    COLLABORATOR = "collaborator"
+    LII_PI_RESEARCHER = "lii_pi_researcher"
+    SCIENTIST = "scientist"
+    ICMR_CAR_JRF = "icmr_car_jrf"
+    ICMR_CAR_POSTDOC = "icmr_car_postdoc"
+    FIELD_OPERATIVE = "field_operative"
+    CLINICAL_TEAM = "clinical_team"
+    CLINICAL_PARTNER = "clinical_partner"
     PI_RESEARCHER = "pi_researcher"
 
 

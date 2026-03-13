@@ -19,7 +19,13 @@ import {
 import { PageSpinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
 import { cn } from '@/lib/utils'
-import { AGE_GROUP_LABELS, type AgeGroup, SAMPLE_TYPE_LABELS, SAMPLE_STATUS_LABELS } from '@/types'
+import {
+  AGE_GROUP_LABELS,
+  type AgeGroup,
+  SAMPLE_TYPE_LABELS,
+  SAMPLE_STATUS_LABELS,
+  type ClinicalData,
+} from '@/types'
 import {
   ArrowLeft,
   Edit,
@@ -41,58 +47,241 @@ const CONSENT_TYPE_LABELS: Record<string, string> = {
   proxy_interview: 'Proxy Interview',
 }
 
-// ──── Clinical data section labels ────────────────────────────────────────
-// The backend clinical_data JSON blob has nested sections. We render
-// whatever keys are present without assuming a fixed schema.
+// ──── Metadata (clinical data) display helpers ────────────────────────────
 
-const SECTION_DISPLAY_NAMES: Record<string, string> = {
-  vitals: 'Vitals',
-  anthropometry: 'Anthropometry',
-  scores: 'Questionnaire Scores',
-  blood_pressure: 'Blood Pressure',
-  glucose: 'Glucose',
-  haematology: 'Haematology',
+function MetaField({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  if (value === null || value === undefined || value === '') return null
+  return (
+    <div className="flex flex-col">
+      <dt className="text-xs text-muted-foreground capitalize">{label}</dt>
+      <dd className={cn('text-sm font-medium text-foreground', mono && 'font-mono')}>{value}</dd>
+    </div>
+  )
 }
 
-function formatClinicalValue(value: unknown): string {
-  if (value === null || value === undefined) return '—'
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
-  if (typeof value === 'object') return JSON.stringify(value)
-  return String(value)
-}
-
-function ClinicalDataSection({
-  label,
-  data,
-}: {
-  label: string
-  data: Record<string, unknown>
-}) {
-  const entries = Object.entries(data)
-  if (entries.length === 0) return null
-
+function MetaCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          {label}
+          {title}
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-2">
-          {entries.map(([key, value]) => (
-            <div key={key} className="flex flex-col">
-              <dt className="text-xs text-muted-foreground capitalize">
-                {key.replace(/_/g, ' ')}
-              </dt>
-              <dd className="text-sm font-medium text-foreground font-mono">
-                {formatClinicalValue(value)}
-              </dd>
-            </div>
-          ))}
-        </dl>
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-2">{children}</dl>
       </CardContent>
     </Card>
+  )
+}
+
+function BoolBadge({ value, label }: { value: boolean | null | undefined; label: string }) {
+  if (value === null || value === undefined) return null
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium',
+        value
+          ? 'bg-danger/10 text-danger'
+          : 'bg-success/10 text-success',
+      )}
+    >
+      {value ? '+ ' : '- '}{label}
+    </span>
+  )
+}
+
+function MetadataContent({ cd }: { cd: ClinicalData }) {
+  const d = cd.demographics
+  const v = cd.vitals
+  const a = cd.anthropometry
+  const s = cd.scores
+  const c = cd.comorbidities
+  const fh = cd.family_history
+  const lf = cd.lifestyle
+  const ad = cd.addiction
+  const fs = cd.female_specific
+
+  return (
+    <div className="space-y-4">
+      {/* Demographics */}
+      {d && (
+        <MetaCard title="Demographics">
+          <MetaField label="Residential Area" value={d.residential_area} />
+          <MetaField label="Education" value={d.education} />
+          <MetaField label="Occupation" value={d.occupation} />
+          <MetaField label="Marital Status" value={d.marital_status} />
+          <MetaField label="Religion" value={d.religion} />
+          <MetaField label="Language" value={d.language} />
+          <MetaField label="Monthly Income" value={d.monthly_income} />
+          <MetaField label="Socioeconomic Status" value={d.socioeconomic_status} />
+          <MetaField label="Family Members" value={d.no_of_family_members} mono />
+          <MetaField label="Living Arrangement" value={d.living_arrangement} />
+        </MetaCard>
+      )}
+
+      {/* Vitals */}
+      {v && (
+        <MetaCard title="Vitals">
+          {(v.bp_sbp != null || v.bp_dbp != null) && (
+            <MetaField label="BP (SBP / DBP)" value={`${v.bp_sbp ?? '?'} / ${v.bp_dbp ?? '?'} mmHg`} mono />
+          )}
+          <MetaField label="Pulse Rate" value={v.pulse_rate != null ? `${v.pulse_rate} bpm` : null} mono />
+          <MetaField label="SpO2" value={v.spo2 != null ? `${v.spo2}%` : null} mono />
+          <MetaField label="Temperature" value={v.temperature != null ? `${v.temperature} °C` : null} mono />
+          <MetaField label="Resp. Rate" value={v.resp_rate != null ? `${v.resp_rate} /min` : null} mono />
+        </MetaCard>
+      )}
+
+      {/* Anthropometry */}
+      {a && (
+        <MetaCard title="Anthropometry">
+          <MetaField label="Height" value={a.height_cm != null ? `${a.height_cm} cm` : null} mono />
+          <MetaField label="Weight" value={a.weight_kg != null ? `${a.weight_kg} kg` : null} mono />
+          <MetaField label="BMI" value={a.bmi != null ? `${a.bmi} kg/m²` : null} mono />
+        </MetaCard>
+      )}
+
+      {/* Questionnaire Scores */}
+      {s && (
+        <MetaCard title="Questionnaire Scores">
+          {s.dass_depression != null && (
+            <MetaField label="DASS Depression" value={`${s.dass_depression}${s.depression_level ? ` (${s.depression_level})` : ''}`} mono />
+          )}
+          {s.dass_anxiety != null && (
+            <MetaField label="DASS Anxiety" value={`${s.dass_anxiety}${s.anxiety_level ? ` (${s.anxiety_level})` : ''}`} mono />
+          )}
+          {s.dass_stress != null && (
+            <MetaField label="DASS Stress" value={`${s.dass_stress}${s.stress_level ? ` (${s.stress_level})` : ''}`} mono />
+          )}
+          <MetaField label="DASS Total" value={s.dass_total} mono />
+          <MetaField label="MMSE Total" value={s.mmse_total} mono />
+          {s.frail_score != null && (
+            <MetaField label="FRAIL Score" value={`${s.frail_score}${s.frail_category ? ` (${s.frail_category})` : ''}`} mono />
+          )}
+          <MetaField label="Sleep Hours" value={s.sleep_hours != null ? `${s.sleep_hours} h` : null} mono />
+          <MetaField label="Sleep Latency" value={s.sleep_latency != null ? `${s.sleep_latency} min` : null} mono />
+        </MetaCard>
+      )}
+
+      {/* Comorbidities */}
+      {c && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Comorbidities
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              <BoolBadge value={c.dm} label={`DM${c.dm && c.dm_type ? ` (${c.dm_type})` : ''}${c.dm && c.dm_duration ? `, ${c.dm_duration}` : ''}`} />
+              <BoolBadge value={c.htn} label={`HTN${c.htn && c.htn_duration ? ` (${c.htn_duration})` : ''}`} />
+              <BoolBadge value={c.bronchial_asthma} label="Bronchial Asthma" />
+              <BoolBadge value={c.ihd} label="IHD" />
+              <BoolBadge value={c.hypothyroid} label="Hypothyroid" />
+              <BoolBadge value={c.epilepsy} label="Epilepsy" />
+              <BoolBadge value={c.psychiatric} label="Psychiatric" />
+              <BoolBadge
+                value={c.covid_history}
+                label={`COVID${c.covid_history && c.covid_vaccinated != null ? ` (vacc: ${c.covid_vaccinated ? 'Yes' : 'No'}${c.covid_doses ? `, ${c.covid_doses} doses` : ''})` : ''}`}
+              />
+              {c.other && (
+                <span className="text-xs text-muted-foreground">Other: {c.other}</span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Family History */}
+      {fh && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Family History
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              <BoolBadge value={fh.dm} label="DM" />
+              <BoolBadge value={fh.ihd} label="IHD" />
+              <BoolBadge value={fh.cancer} label="Cancer" />
+              <BoolBadge value={fh.neurodegenerative} label="Neurodegenerative" />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Lifestyle */}
+      {lf && (
+        <MetaCard title="Lifestyle">
+          <MetaField label="Dietary Pattern" value={lf.dietary_pattern} />
+          <MetaField label="Exercise" value={lf.exercise} />
+          <MetaField label="Bowel Frequency" value={lf.bowel_frequency} />
+          <MetaField label="Water per Day" value={lf.water_per_day} />
+          {lf.probiotics_use != null && (
+            <MetaField label="Probiotics Use" value={lf.probiotics_use ? 'Yes' : 'No'} />
+          )}
+          {lf.supplement_use != null && (
+            <MetaField label="Supplement Use" value={lf.supplement_use ? 'Yes' : 'No'} />
+          )}
+        </MetaCard>
+      )}
+
+      {/* Addiction */}
+      {ad && (
+        <MetaCard title="Addiction">
+          <MetaField label="Smoking" value={ad.smoking_status} />
+          <MetaField label="Smokeless Tobacco" value={ad.smokeless_status} />
+          <MetaField label="Alcohol" value={ad.alcohol_status} />
+          {ad.passive_smoke != null && (
+            <MetaField label="Passive Smoke" value={ad.passive_smoke ? 'Yes' : 'No'} />
+          )}
+        </MetaCard>
+      )}
+
+      {/* Female Specific */}
+      {fs && (
+        <MetaCard title="Female Specific">
+          <MetaField label="Menopausal Status" value={fs.menopausal_status} />
+          <MetaField label="LMP" value={fs.lmp} />
+          {fs.pcos_history != null && (
+            <MetaField label="PCOS History" value={fs.pcos_history ? 'Yes' : 'No'} />
+          )}
+        </MetaCard>
+      )}
+
+      {/* Systemic Exam — raw JSON in collapsible */}
+      {cd.systemic && Object.keys(cd.systemic).length > 0 && (
+        <Card>
+          <CardContent className="pt-4">
+            <details>
+              <summary className="cursor-pointer text-sm font-semibold text-muted-foreground uppercase tracking-wider list-none flex items-center gap-2">
+                <span>Systemic Examination (raw)</span>
+              </summary>
+              <pre className="mt-2 text-xs text-muted-foreground overflow-auto max-h-48 bg-muted rounded p-2">
+                {JSON.stringify(cd.systemic, null, 2)}
+              </pre>
+            </details>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* WHO QoL — raw JSON in collapsible */}
+      {cd.who_qol && Object.keys(cd.who_qol).length > 0 && (
+        <Card>
+          <CardContent className="pt-4">
+            <details>
+              <summary className="cursor-pointer text-sm font-semibold text-muted-foreground uppercase tracking-wider list-none flex items-center gap-2">
+                <span>WHO Quality of Life (raw)</span>
+              </summary>
+              <pre className="mt-2 text-xs text-muted-foreground overflow-auto max-h-48 bg-muted rounded p-2">
+                {JSON.stringify(cd.who_qol, null, 2)}
+              </pre>
+            </details>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   )
 }
 
@@ -135,12 +324,11 @@ export function ParticipantDetailPage() {
     '---'
 
   const pct = Number(participant.completion_pct) || 0
-  const canEdit = hasRole('super_admin', 'lab_manager', 'data_entry')
-  const canAddConsent = hasRole('super_admin', 'lab_manager', 'data_entry', 'field_coordinator')
+  const canEdit = hasRole('super_admin', 'lii_pi_researcher', 'icmr_car_jrf')
+  const canAddConsent = hasRole('super_admin', 'lii_pi_researcher', 'icmr_car_jrf', 'field_operative')
 
-  // Clinical data — it's stored as a JSONB blob; may be null
-  const clinicalData = (participant as unknown as { clinical_data?: Record<string, unknown> | null })
-    .clinical_data
+  // Clinical data — typed via the Participant interface
+  const clinicalData: ClinicalData | null | undefined = participant.clinical_data
 
   // Count abnormal lab results for badge
   const abnormalCount = partnerResults?.filter((r) => r.is_abnormal).length ?? 0
@@ -188,7 +376,7 @@ export function ParticipantDetailPage() {
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="clinical">
-            Clinical Data
+            Metadata
           </TabsTrigger>
           <TabsTrigger value="lab-results">
             Lab Results
@@ -243,6 +431,31 @@ export function ParticipantDetailPage() {
                     <span>{new Date(participant.date_of_birth).toLocaleDateString()}</span>
                   </div>
                 )}
+                <div className="flex items-center gap-2 text-sm">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Age at Collection:</span>
+                    {participant.computed_age != null ? (
+                      <>
+                        <span className="font-medium">{participant.computed_age} yrs</span>
+                        <span className="text-xs text-muted-foreground">
+                          ({
+                            participant.age_source === 'dob_blood' ? 'DOB + blood date' :
+                            participant.age_source === 'dob_enrollment' ? 'from DOB' :
+                            participant.age_source === 'blood_import' ? 'blood import' :
+                            'from ODK form'
+                          })
+                        </span>
+                        {participant.age_group_mismatch && (
+                          <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium bg-warning/15 text-warning">
+                            <AlertTriangle className="h-3 w-3" />
+                            Age group mismatch
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">N/A</span>
+                    )}
+                  </div>
               </CardContent>
             </Card>
 
@@ -295,40 +508,25 @@ export function ParticipantDetailPage() {
           </div>
         </TabsContent>
 
-        {/* ── Clinical Data Tab ─────────────────────────────────────────── */}
+        {/* ── Metadata Tab ──────────────────────────────────────────────── */}
         <TabsContent value="clinical">
           <div className="mt-4">
-            {!clinicalData ? (
-              <EmptyState
-                icon={<ClipboardList className="h-6 w-6" />}
-                title="No clinical data recorded"
-                description="Clinical metadata such as vitals, anthropometry, and questionnaire scores will appear here once collected."
-              />
-            ) : Object.keys(clinicalData).length === 0 ? (
-              <EmptyState
-                icon={<ClipboardList className="h-6 w-6" />}
-                title="Clinical data is empty"
-                description="The clinical data record exists but contains no values yet."
-              />
-            ) : (
-              <div className="space-y-4">
-                {Object.entries(clinicalData).map(([section, sectionData]) => {
-                  const label =
-                    SECTION_DISPLAY_NAMES[section] ??
-                    section.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-
-                  // Each section is expected to be a flat object of key→value pairs.
-                  // If it's a primitive, wrap it.
-                  const data: Record<string, unknown> =
-                    typeof sectionData === 'object' && sectionData !== null
-                      ? (sectionData as Record<string, unknown>)
-                      : { value: sectionData }
-
-                  return (
-                    <ClinicalDataSection key={section} label={label} data={data} />
-                  )
-                })}
-              </div>
+            {activeTab === 'clinical' && (
+              !clinicalData ? (
+                <EmptyState
+                  icon={<ClipboardList className="h-6 w-6" />}
+                  title="No metadata recorded"
+                  description="Clinical metadata such as vitals, anthropometry, and questionnaire scores will appear here once collected."
+                />
+              ) : Object.values(clinicalData).every((v) => v === null || v === undefined) ? (
+                <EmptyState
+                  icon={<ClipboardList className="h-6 w-6" />}
+                  title="Metadata is empty"
+                  description="The metadata record exists but contains no values yet."
+                />
+              ) : (
+                <MetadataContent cd={clinicalData} />
+              )
             )}
           </div>
         </TabsContent>

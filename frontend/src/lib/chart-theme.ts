@@ -160,7 +160,7 @@ export const PLOTLY_LAYOUT_DEFAULTS = {
 // Verified coordinates from Google Maps / OpenStreetMap / Wikimapia (Feb 2026)
 export const SITE_COORDINATES: Record<string, { lat: number; lng: number; name: string; city: string; address: string; urban: boolean }> = {
   RMH: { lat: 13.0282, lng: 77.5699, name: 'M.S. Ramaiah Memorial Hospital', city: 'Bengaluru', address: 'New BEL Rd, M S Ramaiah Nagar, MSRIT Post, Bengaluru 560054', urban: true },
-  BBH: { lat: 13.0467, lng: 77.5880, name: 'Bangalore Baptist Hospital', city: 'Bengaluru', address: 'Bellary Rd, Hebbal, Bengaluru 560024', urban: true },
+  BBH: { lat: 13.0467, lng: 77.5880, name: 'Bangalore Baptist Hospital', city: 'Bengaluru', address: 'Bellary Rd, Hebbal, Bengaluru 560024', urban: false },
   SSSSMH: { lat: 13.4034, lng: 77.6976, name: 'Sri Sathya Sai Sarla Memorial Hospital', city: 'Muddenahalli', address: 'Sathya Sai Grama, Muddenahalli, Chikkaballapur 562101', urban: false },
   CHAF: { lat: 12.9639, lng: 77.6280, name: 'Command Hospital Air Force', city: 'Bengaluru', address: 'Old Airport Rd, Agram Post, Bengaluru 560007', urban: true },
   BMC: { lat: 12.9580, lng: 77.5710, name: 'Bangalore Medical College & Research Institute', city: 'Bengaluru', address: 'Victoria Hospital Campus, Fort, Bengaluru 560002', urban: true },

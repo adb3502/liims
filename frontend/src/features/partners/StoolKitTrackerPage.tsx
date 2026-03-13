@@ -67,7 +67,7 @@ export function StoolKitTrackerPage() {
 
   const kits = data?.data ?? []
   const totalPages = data?.meta ? Math.ceil(data.meta.total / data.meta.per_page) : 0
-  const canWrite = hasRole('super_admin', 'lab_manager', 'field_coordinator', 'data_entry')
+  const canWrite = hasRole('super_admin', 'lii_pi_researcher', 'field_operative', 'icmr_car_jrf')
 
   return (
     <div>

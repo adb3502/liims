@@ -27,13 +27,15 @@ from app.services.field_ops import FieldEventService
 router = APIRouter(prefix="/field-events", tags=["field-events"])
 
 READ_ROLES = (
-    UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER,
-    UserRole.FIELD_COORDINATOR, UserRole.DATA_ENTRY,
-    UserRole.PI_RESEARCHER,
+    UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER,
+    UserRole.ICMR_CAR_JRF, UserRole.ICMR_CAR_POSTDOC,
+    UserRole.FIELD_OPERATIVE, UserRole.CLINICAL_TEAM,
+    UserRole.CLINICAL_PARTNER, UserRole.PI_RESEARCHER,
 )
 WRITE_ROLES = (
-    UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER,
-    UserRole.FIELD_COORDINATOR,
+    UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER,
+    UserRole.ICMR_CAR_JRF, UserRole.ICMR_CAR_POSTDOC,
+    UserRole.FIELD_OPERATIVE, UserRole.CLINICAL_TEAM,
 )
 
 

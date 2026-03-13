@@ -173,7 +173,7 @@ export function FreezerListPage() {
     ? Math.ceil(data.meta.total / data.meta.per_page)
     : 0
 
-  const canCreate = hasRole('super_admin', 'lab_manager')
+  const canCreate = hasRole('super_admin', 'lii_pi_researcher')
 
   // Summary stats
   const freezers = data?.data ?? []

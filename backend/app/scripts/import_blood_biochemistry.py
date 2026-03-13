@@ -11,7 +11,7 @@ import asyncio
 import csv
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -131,15 +131,25 @@ def _to_decimal(val: str) -> Decimal | None:
         return None
 
 
-def _parse_date(row: dict) -> str | None:
-    """Try to parse sample date from the row."""
+def _parse_date(row: dict) -> date | None:
+    """Try to parse sample date from the row. Returns a date object or None."""
     d = row.get("Sample_Date", "").strip()
     if d:
-        return d
+        for fmt in ("%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d", "%-m/%-d/%Y"):
+            try:
+                return datetime.strptime(d, fmt).date()
+            except ValueError:
+                continue
+        return None
     m = row.get("Sample_Month", "").strip()
     y = row.get("Sample_Year", "").strip()
     if m and y:
-        return f"{m}/1/{y}"
+        # Month/Year only — use 1st of month
+        for fmt in ("%m/%Y", "%B/%Y", "%b/%Y"):
+            try:
+                return datetime.strptime(f"{m}/{y}", fmt).date()
+            except ValueError:
+                continue
     return None
 
 
@@ -244,7 +254,9 @@ async def import_csv(csv_path: str) -> None:
                 else:
                     total_unmatched += 1
 
-                date_str = _parse_date(row)
+                sample_date = _parse_date(row)
+                age_at_test_str = row.get("Age", "").strip()
+                age_at_test = int(age_at_test_str) if age_at_test_str.isdigit() else None
 
                 # Create result for each non-empty test value
                 for col_name in TEST_DEFINITIONS:
@@ -267,18 +279,22 @@ async def import_csv(csv_path: str) -> None:
                         if ref_high and num_val > Decimal(ref_high):
                             is_abnormal = True
 
+                    raw = {}
+                    if age_at_test is not None:
+                        raw["age_at_test"] = age_at_test
                     session.add(PartnerLabResult(
                         id=uuid.uuid4(),
                         import_id=import_id,
                         participant_id=p_id,
                         participant_code_raw=p_code,
-                        test_date=None,  # Would need date parsing
+                        test_date=sample_date,
                         test_name_raw=col_name,
                         canonical_test_id=test_id,
                         test_value=val,
                         test_unit=unit,
                         is_abnormal=is_abnormal,
                         match_status=match_status,
+                        raw_data=raw if raw else None,
                     ))
                     total_results += 1
 

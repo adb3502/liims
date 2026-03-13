@@ -76,6 +76,10 @@ export function useOdkSyncLogs(params: ListParams = {}) {
       const res = await api.get<PaginatedResponse<OdkSyncLog>>('/partner/odk/sync-logs', { params })
       return res.data
     },
+    refetchInterval: (query) => {
+      const hasRunning = query.state.data?.data?.some((l: OdkSyncLog) => l.status === 'running')
+      return hasRunning ? 3000 : false
+    },
   })
 }
 

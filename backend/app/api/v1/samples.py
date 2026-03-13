@@ -36,13 +36,15 @@ from app.services.sample import SampleService
 router = APIRouter(prefix="/samples", tags=["samples"])
 
 ALL_ROLES = (
-    UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER, UserRole.LAB_TECHNICIAN,
-    UserRole.FIELD_COORDINATOR, UserRole.DATA_ENTRY,
-    UserRole.COLLABORATOR, UserRole.PI_RESEARCHER,
+    UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER, UserRole.SCIENTIST,
+    UserRole.ICMR_CAR_JRF, UserRole.ICMR_CAR_POSTDOC,
+    UserRole.FIELD_OPERATIVE, UserRole.CLINICAL_TEAM,
+    UserRole.CLINICAL_PARTNER, UserRole.PI_RESEARCHER,
 )
 WRITE_ROLES = (
-    UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER, UserRole.LAB_TECHNICIAN,
-    UserRole.FIELD_COORDINATOR,
+    UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER, UserRole.SCIENTIST,
+    UserRole.ICMR_CAR_JRF, UserRole.ICMR_CAR_POSTDOC,
+    UserRole.FIELD_OPERATIVE, UserRole.CLINICAL_TEAM,
 )
 
 
@@ -114,7 +116,7 @@ async def create_sample(
 async def list_discard_requests(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(
-        UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER,
+        UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER,
     ))],
     request_status: DiscardRequestStatus | None = None,
 ):
@@ -133,7 +135,7 @@ async def approve_discard(
     data: DiscardApprovalRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_role(
-        UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER,
+        UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER,
     ))],
 ):
     """Approve or reject a discard request."""

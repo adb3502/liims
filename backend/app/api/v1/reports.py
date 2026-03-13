@@ -31,14 +31,14 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 
 _report_rate_limit = RateLimiter(max_calls=5, window_seconds=60, key="report_gen", by="ip")
 
-ADMIN_ROLES = (UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER)
+ADMIN_ROLES = (UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER)
 REPORT_ROLES = (
-    UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER, UserRole.PI_RESEARCHER,
+    UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER, UserRole.PI_RESEARCHER,
 )
 ALL_ROLES = (
-    UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER, UserRole.LAB_TECHNICIAN,
-    UserRole.FIELD_COORDINATOR, UserRole.DATA_ENTRY,
-    UserRole.COLLABORATOR, UserRole.PI_RESEARCHER,
+    UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER, UserRole.SCIENTIST,
+    UserRole.FIELD_OPERATIVE, UserRole.ICMR_CAR_JRF,
+    UserRole.PI_RESEARCHER,
 )
 
 

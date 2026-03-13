@@ -12,12 +12,14 @@ import { format } from 'date-fns'
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: 'Super Admin',
-  lab_manager: 'Lab Manager',
-  lab_technician: 'Lab Technician',
-  field_coordinator: 'Field Coordinator',
-  data_entry: 'Data Entry',
-  collaborator: 'Collaborator',
-  pi_researcher: 'PI / Researcher',
+  lii_pi_researcher: 'LII PI/Researcher',
+  scientist: 'Scientist',
+  icmr_car_jrf: 'ICMR-CAR JRF',
+  icmr_car_postdoc: 'ICMR-CAR Postdoc',
+  field_operative: 'Field Operative',
+  clinical_team: 'Clinical Team',
+  clinical_partner: 'Clinical Partner',
+  pi_researcher: 'PI/Researcher',
 }
 
 export function ProfilePage() {

@@ -13,7 +13,7 @@ export function useAuth() {
   }
 
   function isAdmin(): boolean {
-    return hasRole('super_admin', 'lab_manager')
+    return hasRole('super_admin', 'lii_pi_researcher')
   }
 
   return {

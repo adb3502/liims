@@ -107,7 +107,7 @@ export function InstrumentRunsPage() {
     [searchParams, setSearchParams]
   )
 
-  const canCreate = hasRole('super_admin', 'lab_manager', 'lab_technician')
+  const canCreate = hasRole('super_admin', 'lii_pi_researcher', 'scientist')
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
   const runs = data?.data ?? []

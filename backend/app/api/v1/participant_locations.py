@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/participant-locations", tags=["participant-locations"])
 
 ALL_ROLES = (
-    UserRole.SUPER_ADMIN, UserRole.LAB_MANAGER, UserRole.LAB_TECHNICIAN,
-    UserRole.FIELD_COORDINATOR, UserRole.DATA_ENTRY,
-    UserRole.COLLABORATOR, UserRole.PI_RESEARCHER,
+    UserRole.SUPER_ADMIN, UserRole.LII_PI_RESEARCHER, UserRole.SCIENTIST,
+    UserRole.FIELD_OPERATIVE, UserRole.ICMR_CAR_JRF,
+    UserRole.PI_RESEARCHER,
 )
 
 # Indian PIN code → approximate lat/lng mapping for Karnataka region

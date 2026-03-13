@@ -78,7 +78,7 @@ export function RunDetailPage() {
   const [showFailDialog, setShowFailDialog] = useState(false)
   const [showUploadDialog, setShowUploadDialog] = useState(false)
 
-  const canManage = hasRole('super_admin', 'lab_manager', 'lab_technician')
+  const canManage = hasRole('super_admin', 'lii_pi_researcher', 'scientist')
 
   if (!id) {
     return (

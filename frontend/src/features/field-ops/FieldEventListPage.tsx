@@ -73,7 +73,7 @@ export function FieldEventListPage() {
     : 0
 
   const events = data?.data ?? []
-  const canCreate = hasRole('super_admin', 'lab_manager', 'field_coordinator')
+  const canCreate = hasRole('super_admin', 'lii_pi_researcher', 'field_operative')
 
   const siteMap = useMemo(() => {
     const map = new Map<string, string>()

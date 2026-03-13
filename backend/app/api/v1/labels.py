@@ -15,10 +15,10 @@ router = APIRouter(prefix="/labels", tags=["labels"])
 
 LABEL_ROLES = (
     UserRole.SUPER_ADMIN,
-    UserRole.LAB_MANAGER,
-    UserRole.LAB_TECHNICIAN,
-    UserRole.FIELD_COORDINATOR,
-    UserRole.DATA_ENTRY,
+    UserRole.LII_PI_RESEARCHER,
+    UserRole.SCIENTIST,
+    UserRole.FIELD_OPERATIVE,
+    UserRole.ICMR_CAR_JRF,
 )
 
 
