@@ -268,6 +268,38 @@ Add a cron job (Linux) or Task Scheduler entry (Windows):
 0 2 * * * /path/to/lims/scripts/backup.sh >> /var/log/liims-backup.log 2>&1
 ```
 
+## Auto-Start on System Restart
+
+All Docker services are configured with `restart: unless-stopped`, so they restart automatically whenever Docker Desktop is running. Two steps are required after a fresh install.
+
+### Step 1 — Enable Docker Desktop auto-start
+
+Open Docker Desktop → Settings (gear icon) → General → enable **"Start Docker Desktop when you log in"**.
+
+### Step 2 — Install the LIIMS startup script (one-time)
+
+```powershell
+cd D:\Users\adb\dev\bharat-study\lims
+powershell -ExecutionPolicy Bypass -File scripts\install-startup.ps1
+```
+
+This places a shortcut in the Windows Startup folder. On every login it:
+
+1. Waits up to 3 minutes for Docker Engine to become ready
+2. Runs `docker compose up -d`
+3. Logs output to `logs\startup.log`
+
+To uninstall, delete `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\LIIMS.lnk`.
+
+### Verify after reboot
+
+```bash
+docker compose ps
+curl http://localhost/api/health
+```
+
+---
+
 ## Updating
 
 ```bash
