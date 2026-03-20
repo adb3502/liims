@@ -1379,7 +1379,7 @@ function DistributionTab({
   const [colorBy, setColorBy] = useState<ColorBy>('group')
   const [palette, setPalette] = useState<PaletteName>('default')
   const [showPoints, setShowPoints] = useState(true)
-  const [pointsSide, setPointsSide] = useState(true)
+  const [pointsSide, setPointsSide] = useState(false)
   const [removeOutliers, setRemoveOutliers] = useState(true)
   const [showGridlines, setShowGridlines] = useState(false)
   const [showExport, setShowExport] = useState(false)
@@ -1761,8 +1761,7 @@ function DistributionTab({
       const x0 = 0  // reference group is always index 0, xPos = getAgeSexXPos(0) = 0
       const x1 = groupBy === 'age_sex' ? getAgeSexXPos(gi) : gi
       const cx = (x0 + x1) / 2
-      // Fixed small gap — just enough for the label, 2-3 char spaces each side
-      const gapHalf = 0.10
+      const gapHalf = 0.05
       shapes.push(
         // Left half of horizontal bracket
         { type: 'line', x0, y0: y, x1: cx - gapHalf, y1: y, xref: 'x', yref: 'y', line: { color, width: lw } },
@@ -2020,7 +2019,7 @@ function DistributionTab({
                       ? { text: 'Density', font: { size: 11 } }
                       : undefined,
                 ...(sigBarElements.yMax != null ? { range: [
-                  Math.min(...processedGroups.flatMap((g) => g.values)) - Math.max(Math.max(...processedGroups.flatMap((g) => g.values)) - Math.min(...processedGroups.flatMap((g) => g.values)), 1) * 0.05,
+                  Math.min(...processedGroups.flatMap((g) => g.values)) - Math.max(Math.max(...processedGroups.flatMap((g) => g.values)) - Math.min(...processedGroups.flatMap((g) => g.values)), 1) * 0.15,
                   sigBarElements.yMax,
                 ] } : {}),
               },
