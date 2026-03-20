@@ -1691,7 +1691,7 @@ function DistributionTab({
         xref: 'x', yref: 'y',
         text: label, showarrow: false,
         font: { size: isSig ? 13 : 10, color, family: '"Red Hat Display", sans-serif' },
-        yanchor: 'bottom',
+        yanchor: 'middle',
       })
     }
     const nDrawn = processedGroups.length - 1
