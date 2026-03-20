@@ -47,7 +47,7 @@ async def _run_sync():
             return
 
         svc = OdkService(session)
-        log = await svc.trigger_sync(form_id=None, triggered_by=admin.id)
+        log = await svc.trigger_sync(form_id=None, triggered_by=admin.id, trigger_type="scheduled")
         await session.commit()
 
         logger.info(

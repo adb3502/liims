@@ -47,8 +47,8 @@ def upgrade() -> None:
     op.execute("UPDATE notification SET recipient_role = 'FIELD_OPERATIVE' WHERE recipient_role = 'FIELD_COORDINATOR'")
     op.execute("UPDATE notification SET recipient_role = 'PI_RESEARCHER' WHERE recipient_role = 'COLLABORATOR'")
 
-    # Step 3: Drop old enum type and create new one with full role set
-    op.execute("DROP TYPE userrole")
+    # Step 3: Drop old enum type (if exists) and create new one with full role set
+    op.execute("DROP TYPE IF EXISTS userrole")
     op.execute("""
         CREATE TYPE userrole AS ENUM (
             'SUPER_ADMIN',
@@ -71,7 +71,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute('ALTER TABLE "user" ALTER COLUMN role TYPE text')
     op.execute("ALTER TABLE notification ALTER COLUMN recipient_role TYPE text")
-    op.execute("DROP TYPE userrole")
+    op.execute("DROP TYPE IF EXISTS userrole")
     op.execute("""
         CREATE TYPE userrole AS ENUM (
             'SUPER_ADMIN',

@@ -116,7 +116,7 @@ async def trigger_sync(
 ):
     """Trigger an ODK sync (specific form or all forms)."""
     svc = OdkService(db)
-    log = await svc.trigger_sync(form_id=data.form_id, triggered_by=current_user.id)
+    log = await svc.trigger_sync(form_id=data.form_id, triggered_by=current_user.id, trigger_type="manual")
     return {
         "success": True,
         "data": OdkSyncLogRead.model_validate(log).model_dump(mode="json"),

@@ -145,8 +145,8 @@ export const PLOTLY_LAYOUT_DEFAULTS = {
   paper_bgcolor: 'transparent',
   plot_bgcolor: 'transparent',
   margin: { l: 60, r: 30, t: 40, b: 60 },
-  xaxis: { gridcolor: '#E2E8F0', linecolor: '#CBD5E1', zerolinecolor: '#E2E8F0' },
-  yaxis: { gridcolor: '#E2E8F0', linecolor: '#CBD5E1', zerolinecolor: '#E2E8F0' },
+  xaxis: { gridcolor: '#E2E8F0', linecolor: '#CBD5E1', zerolinecolor: '#E2E8F0', showgrid: false },
+  yaxis: { gridcolor: '#E2E8F0', linecolor: '#CBD5E1', zerolinecolor: '#E2E8F0', showgrid: false },
   hoverlabel: {
     bgcolor: 'white',
     bordercolor: '#E2E8F0',

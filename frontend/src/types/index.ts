@@ -798,6 +798,7 @@ export interface OdkSyncLog {
   sync_started_at: string
   sync_completed_at: string | null
   status: OdkSyncStatus
+  trigger_type: 'manual' | 'scheduled'
   submissions_found: number | null
   submissions_processed: number | null
   submissions_failed: number | null

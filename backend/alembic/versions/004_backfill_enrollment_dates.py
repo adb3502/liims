@@ -25,6 +25,7 @@ rows updated by this migration in subsequent queries or audits.
 from typing import Sequence, Union
 
 from alembic import op
+from sqlalchemy import text
 
 revision: str = "004"
 down_revision: Union[str, None] = "003"
@@ -36,7 +37,7 @@ def upgrade() -> None:
     conn = op.get_bind()
 
     # Step 1: Update from earliest lab result test_date
-    conn.execute(
+    conn.execute(text(
         """
         UPDATE participant p
         SET
@@ -57,10 +58,10 @@ def upgrade() -> None:
                   AND plr.test_date IS NOT NULL
             )
         """
-    )
+    ))
 
     # Step 2: Update from earliest ODK submission for those still without source
-    conn.execute(
+    conn.execute(text(
         """
         UPDATE participant p
         SET
@@ -79,10 +80,10 @@ def upgrade() -> None:
                 WHERE os.participant_id = p.id
             )
         """
-    )
+    ))
 
     # Step 3: Mark remaining as bulk_import (enrollment_date unchanged)
-    conn.execute(
+    conn.execute(text(
         """
         UPDATE participant
         SET enrollment_date_source = 'bulk_import'
@@ -90,16 +91,16 @@ def upgrade() -> None:
             is_deleted = false
             AND enrollment_date_source IS NULL
         """
-    )
+    ))
 
 
 def downgrade() -> None:
     # Clear the source field; enrollment_date cannot be reliably reversed
     conn = op.get_bind()
-    conn.execute(
+    conn.execute(text(
         """
         UPDATE participant
         SET enrollment_date_source = NULL
         WHERE enrollment_date_source IN ('backfill_lab_date', 'backfill_odk', 'bulk_import')
         """
-    )
+    ))

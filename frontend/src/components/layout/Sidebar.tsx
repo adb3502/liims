@@ -22,6 +22,7 @@ interface NavItem {
   path: string
   icon: React.ReactNode
   roles?: UserRole[]
+  sectionLabel?: string
   children?: Array<{ label: string; path: string; roles?: UserRole[] }>
 }
 
@@ -67,6 +68,7 @@ const navigation: NavItem[] = [
     ],
   },
   {
+    sectionLabel: 'FIELD OPS',
     label: 'Field Operations',
     path: '/field-ops',
     icon: <MapPin className="h-5 w-5" />,
@@ -89,6 +91,7 @@ const navigation: NavItem[] = [
     ],
   },
   {
+    sectionLabel: 'LAB',
     label: 'Instruments',
     path: '/instruments',
     icon: <Microscope className="h-5 w-5" />,
@@ -103,6 +106,7 @@ const navigation: NavItem[] = [
     ],
   },
   {
+    sectionLabel: 'ANALYTICS',
     label: 'Analytics',
     path: '/reports',
     icon: <BarChart3 className="h-5 w-5" />,
@@ -122,6 +126,7 @@ const navigation: NavItem[] = [
     icon: <FileText className="h-5 w-5" />,
   },
   {
+    sectionLabel: 'ADMIN',
     label: 'Admin',
     path: '/admin',
     icon: <Shield className="h-5 w-5" />,
@@ -164,9 +169,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         'flex h-screen flex-col transition-[width] duration-300 ease-in-out',
         collapsed ? 'w-[68px]' : 'w-64'
       )}
-      style={{
-        background: 'linear-gradient(180deg, #0F172A 0%, #1A1F3A 50%, #162044 100%)',
-      }}
+      style={{ background: '#0F172A' }}
     >
       {/* Logo area */}
       <div className="flex h-16 items-center px-4 border-b border-white/[0.06]">
@@ -198,27 +201,38 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
             return (
               <li key={item.path}>
-                <NavLink
-                  to={item.children ? item.children[0].path : item.path}
-                  className={cn(
-                    'group flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-150',
-                    active
-                      ? 'bg-white/[0.1] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]'
-                      : 'text-white/50 hover:bg-white/[0.05] hover:text-white/80'
+                {item.sectionLabel && !collapsed && (
+                  <p
+                    className="px-3 pt-4 pb-1 uppercase tracking-[0.08em] font-semibold"
+                    style={{ fontSize: '0.6875rem', color: '#475569' }}
+                  >
+                    {item.sectionLabel}
+                  </p>
+                )}
+
+                <div className="relative">
+                  {active && (
+                    <span className="absolute left-0 top-1 bottom-1 w-[3px] rounded-r-full bg-[#3674F6]" />
                   )}
-                  title={collapsed ? item.label : undefined}
-                >
-                  <span className={cn(
-                    'flex-shrink-0 transition-colors',
-                    active ? 'text-[#5B93FF]' : 'text-white/40 group-hover:text-white/60'
-                  )}>
-                    {item.icon}
-                  </span>
-                  {!collapsed && <span>{item.label}</span>}
-                  {active && !collapsed && (
-                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#5B93FF]" />
-                  )}
-                </NavLink>
+                  <NavLink
+                    to={item.children ? item.children[0].path : item.path}
+                    className={cn(
+                      'group flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-150',
+                      active
+                        ? 'bg-[#1E293B] text-white'
+                        : 'text-[#94A3B8] hover:bg-[#1E293B] hover:text-[#CBD5E1]'
+                    )}
+                    title={collapsed ? item.label : undefined}
+                  >
+                    <span className={cn(
+                      'flex-shrink-0 transition-colors',
+                      active ? 'text-white' : 'text-[#64748B] group-hover:text-[#94A3B8]'
+                    )}>
+                      {item.icon}
+                    </span>
+                    {!collapsed && <span>{item.label}</span>}
+                  </NavLink>
+                </div>
 
                 {showChildren && (
                   <ul className="ml-[26px] mt-0.5 space-y-0.5 border-l border-white/[0.06] pl-3">
@@ -233,7 +247,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                                 'block rounded-md px-2.5 py-1.5 text-[12px] transition-all duration-150',
                                 linkActive
                                   ? 'font-medium text-white bg-white/[0.06]'
-                                  : 'text-white/40 hover:text-white/70 hover:bg-white/[0.03]'
+                                  : 'text-[#64748B] hover:text-[#94A3B8] hover:bg-white/[0.03]'
                               )
                             }
                           >

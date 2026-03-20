@@ -94,14 +94,64 @@ export function useCreateOdkFormConfig() {
   })
 }
 
+// Prefix key used for cache operations — matches all sync-log queries regardless of params
+const SYNC_LOG_PREFIX = ['odk', 'sync-logs'] as const
+
 export function useTriggerOdkSync() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (form_id?: string) => {
-      const res = await api.post('/partner/odk/sync', { form_id })
-      return res.data
+      const res = await api.post<{ success: true; data: OdkSyncLog }>('/partner/odk/sync', { form_id })
+      return res.data.data
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: odkKeys.syncLogs() }),
+    onMutate: () => {
+      // Inject optimistic "running" row immediately so the user sees feedback
+      // while the sync runs inline on the server (~5 seconds).
+      const optimisticLog: OdkSyncLog = {
+        id: '__optimistic__',
+        sync_started_at: new Date().toISOString(),
+        sync_completed_at: null,
+        status: 'running',
+        trigger_type: 'manual',
+        submissions_found: null,
+        submissions_processed: null,
+        submissions_failed: null,
+        error_message: null,
+        created_by: null,
+      }
+      // Use the 2-element prefix key so it prefix-matches all sync-log queries
+      qc.setQueriesData(
+        { queryKey: SYNC_LOG_PREFIX },
+        (old: { data: OdkSyncLog[]; meta: unknown } | undefined) => {
+          if (!old) return old
+          return { ...old, data: [optimisticLog, ...old.data] }
+        },
+      )
+    },
+    onSuccess: (realLog) => {
+      // Replace the optimistic row with the real result returned by the server
+      qc.setQueriesData(
+        { queryKey: SYNC_LOG_PREFIX },
+        (old: { data: OdkSyncLog[]; meta: unknown } | undefined) => {
+          if (!old) return old
+          return {
+            ...old,
+            data: [realLog, ...old.data.filter((l: OdkSyncLog) => l.id !== '__optimistic__')],
+          }
+        },
+      )
+    },
+    onError: () => {
+      // Remove the optimistic row on error
+      qc.setQueriesData(
+        { queryKey: SYNC_LOG_PREFIX },
+        (old: { data: OdkSyncLog[]; meta: unknown } | undefined) => {
+          if (!old) return old
+          return { ...old, data: old.data.filter((l: OdkSyncLog) => l.id !== '__optimistic__') }
+        },
+      )
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: SYNC_LOG_PREFIX }),
   })
 }
 

@@ -16,9 +16,9 @@ celery.conf.update(
     timezone="Asia/Kolkata",
     enable_utc=True,
     beat_schedule={
-        "odk-sync-weekly": {
+        "odk-sync-daily": {
             "task": "app.tasks.odk.sync_odk_submissions",
-            "schedule": crontab(hour=6, minute=0, day_of_week=1),  # Monday 6:00 AM IST
+            "schedule": crontab(hour=6, minute=0),  # Daily 6:00 AM IST
         },
         "scan-watch-directories": {
             "task": "app.tasks.files.scan_watch_directories",

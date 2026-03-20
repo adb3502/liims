@@ -367,7 +367,7 @@ class OdkService:
         return config
 
     async def trigger_sync(
-        self, form_id: str | None, triggered_by: uuid.UUID
+        self, form_id: str | None, triggered_by: uuid.UUID, trigger_type: str = "manual"
     ) -> OdkSyncLog:
         """Pull submissions from ODK Central and create/update participants.
 
@@ -383,6 +383,7 @@ class OdkService:
             id=uuid.uuid4(),
             sync_started_at=now,
             status=OdkSyncStatus.RUNNING,
+            trigger_type=trigger_type,
             submissions_found=0,
             submissions_processed=0,
             submissions_failed=0,

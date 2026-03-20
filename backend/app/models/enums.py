@@ -171,6 +171,11 @@ class OdkSyncStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class OdkTriggerType(str, enum.Enum):
+    MANUAL = "manual"
+    SCHEDULED = "scheduled"
+
+
 class OdkProcessingStatus(str, enum.Enum):
     PENDING = "pending"
     PROCESSED = "processed"

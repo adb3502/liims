@@ -35,6 +35,8 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
+  User,
+  CalendarClock,
 } from 'lucide-react'
 
 const SYNC_STATUS_BADGE: Record<OdkSyncStatus, 'success' | 'destructive' | 'warning'> = {
@@ -189,6 +191,7 @@ export function OdkSyncPage() {
                   <TableHead>Started</TableHead>
                   <TableHead>Completed</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Trigger</TableHead>
                   <TableHead className="text-right">Found</TableHead>
                   <TableHead className="text-right">Processed</TableHead>
                   <TableHead className="text-right">Failed</TableHead>
@@ -198,8 +201,10 @@ export function OdkSyncPage() {
               <TableBody>
                 {logs.map((log) => {
                   const StatusIcon = SYNC_STATUS_ICON[log.status]
+                  const isOptimistic = log.id === '__optimistic__'
+                  const TriggerIcon = log.trigger_type === 'scheduled' ? CalendarClock : User
                   return (
-                    <TableRow key={log.id}>
+                    <TableRow key={log.id} className={isOptimistic ? 'opacity-60' : undefined}>
                       <TableCell className="font-mono text-sm">
                         {new Date(log.sync_started_at).toLocaleString()}
                       </TableCell>
@@ -213,6 +218,12 @@ export function OdkSyncPage() {
                           <StatusIcon className="h-3 w-3 mr-1" />
                           {log.status}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                          <TriggerIcon className="h-3 w-3" />
+                          {log.trigger_type ?? 'manual'}
+                        </span>
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm">
                         {log.submissions_found ?? '---'}

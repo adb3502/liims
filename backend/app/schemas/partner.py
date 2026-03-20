@@ -50,6 +50,7 @@ class OdkSyncLogRead(BaseModel):
     sync_started_at: datetime
     sync_completed_at: datetime | None
     status: OdkSyncStatus
+    trigger_type: str = "manual"
     submissions_found: int | None
     submissions_processed: int | None
     submissions_failed: int | None

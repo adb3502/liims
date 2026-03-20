@@ -61,6 +61,7 @@ class OdkSyncLog(UUIDPrimaryKeyMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     status: Mapped[OdkSyncStatus] = mapped_column(nullable=False)
+    trigger_type: Mapped[str] = mapped_column(String(20), nullable=False, server_default="manual")
     submissions_found: Mapped[int | None] = mapped_column(Integer, nullable=True)
     submissions_processed: Mapped[int | None] = mapped_column(Integer, nullable=True)
     submissions_failed: Mapped[int | None] = mapped_column(Integer, nullable=True)

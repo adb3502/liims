@@ -31,15 +31,7 @@ import {
 } from 'recharts'
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import {
-  Users,
-  FlaskConical,
-  Snowflake,
-  ShieldCheck,
-  BarChart3,
-  Calendar,
-  ArrowRight,
-} from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 
 // ── Site bubble radius: perceptually accurate (area ∝ count) ──
 // Minimum 8px so zero-enrollment sites are still visible.
@@ -336,17 +328,26 @@ const ROLE_LABELS: Record<string, string> = {
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr)
-  return d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
+  return d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
 }
 
-function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) {
+function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ dataKey: string; value: number }>; label?: string }) {
   if (!active || !payload?.length) return null
+  const cumEntry = payload.find((p) => p.dataKey === 'cumulative')
+  const countEntry = payload.find((p) => p.dataKey === 'count')
   return (
-    <div style={RECHARTS_THEME.tooltip.contentStyle} className="px-3 py-2">
-      <p className="text-xs text-gray-500 mb-1">{label}</p>
-      <p className="text-sm font-semibold text-gray-900">
-        {payload[0].value.toLocaleString()} participants
-      </p>
+    <div style={RECHARTS_THEME.tooltip.contentStyle} className="px-3 py-2 space-y-0.5">
+      <p className="text-xs text-gray-500 mb-1">{label ? formatDate(label) : ''}</p>
+      {cumEntry && (
+        <p className="text-sm font-semibold text-gray-900">
+          {cumEntry.value.toLocaleString()} cumulative
+        </p>
+      )}
+      {countEntry && (
+        <p className="text-xs text-gray-500">
+          +{countEntry.value.toLocaleString()} this month
+        </p>
+      )}
     </div>
   )
 }
@@ -407,8 +408,8 @@ export function DashboardPage() {
 
   // Enrollment time series with per-site breakdown
   const enrollmentTimeSeries = useMemo(() => {
-    const timeData = enrollment?.enrollment_over_time ?? enrollment?.enrollment_rate_30d
-    if (!timeData) return []
+    const timeData = enrollment?.enrollment_over_time ?? []
+    if (!timeData.length) return []
 
     // Build per-site lookup: date → { site_code: count }
     const siteByDate = new Map<string, Record<string, number>>()
@@ -433,7 +434,12 @@ export function DashboardPage() {
       }
       return row
     })
-  }, [enrollment?.enrollment_over_time, enrollment?.enrollment_rate_30d, enrollment?.enrollment_by_site_month, siteCodes])
+  }, [enrollment?.enrollment_over_time, enrollment?.enrollment_by_site_month, siteCodes])
+
+  // Sparkline: last 12 monthly counts for enrollment card
+  const enrollmentSparkline = useMemo(() => {
+    return enrollmentTimeSeries.slice(-12).map((d) => (d as { count: number }).count)
+  }, [enrollmentTimeSeries])
 
   return (
     <div className="space-y-6">
@@ -477,35 +483,28 @@ export function DashboardPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             title="Total Participants"
-            value={overview ? formatNumber(overview.enrollment.total) : '--'}
-            subtitle={overview ? `+${overview.enrollment.recent_30d} this month` : undefined}
-            icon={<Users className="h-5 w-5" />}
-            accentColor={COLORS.primary}
+            value={overview ? overview.enrollment.total : '--'}
+            sparkline={enrollmentSparkline}
+            sparklineColor={COLORS.primary}
             trend={overview?.enrollment.recent_30d ? {
               value: overview.enrollment.recent_30d,
-              label: `new this month`,
+              label: 'new this month',
             } : undefined}
           />
           <StatCard
             title="Total Samples"
-            value={overview ? formatNumber(overview.samples.total) : '--'}
+            value={overview ? overview.samples.total : '--'}
             subtitle={overview ? `${overview.samples.in_storage.toLocaleString()} in storage` : undefined}
-            icon={<FlaskConical className="h-5 w-5" />}
-            accentColor={COLORS.teal}
           />
           <StatCard
             title="Storage Utilization"
             value={overview ? `${overview.storage.utilization_pct.toFixed(1)}%` : '--'}
             subtitle="Across all freezers"
-            icon={<Snowflake className="h-5 w-5" />}
-            accentColor={COLORS.success}
           />
           <StatCard
             title="QC Pass Rate"
             value={overview ? `${overview.quality.qc_pass_rate.toFixed(1)}%` : '--'}
             subtitle="Quality control"
-            icon={<ShieldCheck className="h-5 w-5" />}
-            accentColor={COLORS.warning}
           />
         </div>
       )}
@@ -532,7 +531,8 @@ export function DashboardPage() {
               </defs>
               <CartesianGrid {...RECHARTS_THEME.grid} />
               <XAxis
-                dataKey="dateLabel"
+                dataKey="date"
+                tickFormatter={(v: string) => formatDate(v)}
                 tick={{ fontSize: 11, fill: '#000000', fontFamily: '"Red Hat Display", sans-serif' }}
                 tickLine={false}
                 axisLine={false}
@@ -648,34 +648,26 @@ export function DashboardPage() {
         <h2 className="text-sm font-semibold text-gray-800 mb-3">Quick Actions</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { label: 'Enrollment Analytics', to: '/reports/enrollment', icon: Users, color: COLORS.primary, desc: 'Enrollment trends and demographics' },
-            { label: 'Inventory Overview', to: '/reports/inventory', icon: FlaskConical, color: COLORS.teal, desc: 'Sample counts and storage' },
-            { label: 'Quality Dashboard', to: '/reports/quality', icon: BarChart3, color: COLORS.success, desc: 'QC metrics and ICC results' },
-            { label: 'Field Operations', to: '/field-ops/events', icon: Calendar, color: COLORS.warning, desc: 'Upcoming events and check-ins' },
+            { label: 'Enrollment Analytics', to: '/reports/enrollment', desc: 'Enrollment trends and demographics' },
+            { label: 'Inventory Overview', to: '/reports/inventory', desc: 'Sample counts and storage' },
+            { label: 'Quality Dashboard', to: '/reports/quality', desc: 'QC metrics and ICC results' },
+            { label: 'Field Operations', to: '/field-ops/events', desc: 'Upcoming events and check-ins' },
           ].map((link) => (
             <Link
               key={link.to}
               to={link.to}
               className={cn(
-                'group flex items-start gap-3 rounded-xl bg-white border border-gray-100 p-4',
+                'group flex items-start justify-between rounded-xl bg-white border border-gray-100 p-4',
                 'hover:shadow-[0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200'
               )}
             >
-              <div
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-                style={{ backgroundColor: `${link.color}12`, color: link.color }}
-              >
-                <link.icon className="h-4.5 w-4.5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-800 group-hover:text-primary transition-colors">
-                    {link.label}
-                  </span>
-                  <ArrowRight className="h-3.5 w-3.5 text-gray-300 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-                </div>
+              <div className="min-w-0">
+                <span className="text-sm font-medium text-gray-800 group-hover:text-primary transition-colors">
+                  {link.label}
+                </span>
                 <p className="text-xs text-gray-400 mt-0.5">{link.desc}</p>
               </div>
+              <ArrowRight className="h-3.5 w-3.5 shrink-0 mt-0.5 text-gray-300 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
             </Link>
           ))}
         </div>

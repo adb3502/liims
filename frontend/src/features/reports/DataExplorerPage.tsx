@@ -525,6 +525,136 @@ function ParameterSelect({
   )
 }
 
+// ---- Pairwise matrix data type (shared between PairwiseMatrix, ExportDialog, DistributionTab) ----
+
+interface MatrixData {
+  groups: ProcessedGroup[]
+  pairStats: Map<string, { eps: number; pAdj: number }>
+  labels: string[]
+  nPairs: number
+}
+
+/** Draw the pairwise matrix onto an existing canvas context — used for combined PNG export. */
+function drawMatrixOnCanvas(
+  ctx: CanvasRenderingContext2D,
+  data: MatrixData,
+  startY: number,
+  canvasWidth: number,
+  pr: number,
+): number {
+  const { groups, pairStats, labels, nPairs } = data
+  const k = groups.length
+  const pad = 16 * pr
+  const titleH = 30 * pr
+  const headerH = 34 * pr
+  const cellH = 46 * pr
+  const rowLabelW = 80 * pr
+  const availW = canvasWidth - pad * 2 - rowLabelW
+  const cellW = Math.min(100 * pr, availW / k)
+  const tableW = rowLabelW + cellW * k
+  const fs = Math.round(10 * pr)
+  const fsSmall = Math.round(8.5 * pr)
+
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, startY, canvasWidth, titleH + headerH + cellH * k + 44 * pr)
+
+  ctx.font = `bold ${fs + 1}px "Red Hat Display", sans-serif`
+  ctx.fillStyle = '#111827'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('Pairwise Comparisons', pad, startY + titleH * 0.6)
+
+  const tableY = startY + titleH
+
+  ctx.fillStyle = '#F9FAFB'
+  ctx.fillRect(pad, tableY, tableW, headerH)
+  ctx.strokeStyle = '#E5E7EB'
+  ctx.lineWidth = 0.5 * pr
+  ctx.strokeRect(pad, tableY, tableW, headerH)
+
+  ctx.font = `bold ${fs}px "Red Hat Display", sans-serif`
+  ctx.fillStyle = '#374151'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  for (let j = 0; j < k; j++) {
+    ctx.fillText(labels[j], pad + rowLabelW + cellW * j + cellW / 2, tableY + headerH / 2)
+  }
+
+  for (let i = 0; i < k; i++) {
+    const rowY = tableY + headerH + cellH * i
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(pad, rowY, rowLabelW, cellH)
+    ctx.strokeStyle = '#E5E7EB'
+    ctx.lineWidth = 0.5 * pr
+    ctx.strokeRect(pad, rowY, rowLabelW, cellH)
+    ctx.font = `bold ${fs}px "Red Hat Display", sans-serif`
+    ctx.fillStyle = '#374151'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(labels[i], pad + 6 * pr, rowY + cellH / 2)
+
+    for (let j = 0; j < k; j++) {
+      const cellX = pad + rowLabelW + cellW * j
+      if (i === j) {
+        ctx.fillStyle = '#F9FAFB'
+        ctx.fillRect(cellX, rowY, cellW, cellH)
+        ctx.font = `bold ${fs}px "Red Hat Display", sans-serif`
+        ctx.fillStyle = '#6B7280'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(labels[i], cellX + cellW / 2, rowY + cellH / 2)
+      } else if (j > i) {
+        const pct = groups[i].median !== 0
+          ? ((groups[j].median - groups[i].median) / Math.abs(groups[i].median)) * 100
+          : 0
+        const isPos = pct > 0
+        const absPct = Math.abs(pct)
+        const alpha = Math.min(0.85, absPct / 50)
+        ctx.fillStyle = isPos ? `rgba(5,150,105,${alpha})` : `rgba(220,38,38,${alpha})`
+        ctx.fillRect(cellX, rowY, cellW, cellH)
+        ctx.font = `bold ${fs}px "Red Hat Display", sans-serif`
+        ctx.fillStyle = absPct > 25 ? 'white' : (isPos ? '#065F46' : '#991B1B')
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(`${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`, cellX + cellW / 2, rowY + cellH / 2)
+      } else {
+        const s = pairStats.get(`${i}-${j}`)
+        const eps = s?.eps ?? 0
+        const pAdj = s?.pAdj ?? 1
+        const alpha = Math.min(0.85, eps / 0.2)
+        ctx.fillStyle = `rgba(54,116,246,${alpha})`
+        ctx.fillRect(cellX, rowY, cellW, cellH)
+        const onDark = eps > 0.12
+        ctx.font = `bold ${fs}px "Red Hat Display", sans-serif`
+        ctx.fillStyle = onDark ? 'white' : '#1E3A8A'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(eps.toFixed(3), cellX + cellW / 2, rowY + cellH * 0.35)
+        const pText = formatPAdj(pAdj)
+        const pSig = pAdj < 0.05
+        ctx.font = `${fsSmall}px "Red Hat Display", sans-serif`
+        ctx.fillStyle = onDark
+          ? (pSig ? '#FEF08A' : 'rgba(255,255,255,0.55)')
+          : (pSig ? '#1D4ED8' : '#94A3B8')
+        ctx.textBaseline = 'top'
+        ctx.fillText(pText, cellX + cellW / 2, rowY + cellH * 0.58)
+      }
+      ctx.strokeStyle = '#E5E7EB'
+      ctx.lineWidth = 0.5 * pr
+      ctx.strokeRect(cellX, rowY, cellW, cellH)
+    }
+  }
+
+  const legendY = tableY + headerH + cellH * k + 10 * pr
+  ctx.font = `${fsSmall}px "Red Hat Display", sans-serif`
+  ctx.fillStyle = '#9CA3AF'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'top'
+  ctx.fillText(`ε² = H/(N−1); p Bonferroni-corrected for ${nPairs} pairs`, pad, legendY)
+
+  return legendY + fsSmall * 1.5 + pad - startY
+}
+
 // ---- Export Dialog ----
 
 const DPI_OPTIONS = [
@@ -539,16 +669,19 @@ function ExportDialog({
   plotRef,
   title,
   onClose,
+  matrixData,
 }: {
   plotRef: React.RefObject<HTMLDivElement | null>
   title: string
   onClose: () => void
+  matrixData?: MatrixData
 }) {
   const [format, setFormat] = useState<'svg' | 'png'>('png')
   const [width, setWidth] = useState(1200)
   const [height, setHeight] = useState(600)
   const [scale, setScale] = useState(4) // 300 dpi default
   const [transparent, setTransparent] = useState(false)
+  const [includeMatrix, setIncludeMatrix] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -666,16 +799,47 @@ function ExportDialog({
     if (!el) return
     setExporting(true)
     try {
-      const dataUrl = await exportWithSettings(el, {
-        format,
-        width,
-        height,
-        scale: format === 'png' ? scale : 1,
-      }, transparent, title)
-      // Trigger download via anchor
+      let dataUrl: string
+      if (includeMatrix && matrixData) {
+        // Combined export: plot PNG + matrix canvas stacked vertically
+        const pr = scale
+        const plotUrl = await exportWithSettings(el, { format: 'png', width, height, scale: pr }, transparent, title)
+        const plotImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const img = new Image()
+          img.onload = () => resolve(img)
+          img.onerror = reject
+          img.src = plotUrl
+        })
+        const k = matrixData.groups.length
+        const matrixPxH = Math.round((30 + 34 + 46 * k + 44) * pr)
+        const matrixCanvas = document.createElement('canvas')
+        matrixCanvas.width = width * pr
+        matrixCanvas.height = matrixPxH
+        const mCtx = matrixCanvas.getContext('2d')!
+        mCtx.fillStyle = transparent ? 'rgba(0,0,0,0)' : '#ffffff'
+        mCtx.fillRect(0, 0, matrixCanvas.width, matrixCanvas.height)
+        drawMatrixOnCanvas(mCtx, matrixData, 0, matrixCanvas.width, pr)
+        const finalCanvas = document.createElement('canvas')
+        finalCanvas.width = width * pr
+        finalCanvas.height = plotImg.height + matrixCanvas.height
+        const fCtx = finalCanvas.getContext('2d')!
+        fCtx.fillStyle = transparent ? 'rgba(0,0,0,0)' : '#ffffff'
+        fCtx.fillRect(0, 0, finalCanvas.width, finalCanvas.height)
+        fCtx.drawImage(plotImg, 0, 0)
+        fCtx.drawImage(matrixCanvas, 0, plotImg.height)
+        dataUrl = finalCanvas.toDataURL('image/png')
+      } else {
+        dataUrl = await exportWithSettings(el, {
+          format,
+          width,
+          height,
+          scale: format === 'png' ? scale : 1,
+        }, transparent, title)
+      }
+      const ext = includeMatrix && matrixData ? 'png' : format
       const a = document.createElement('a')
       a.href = dataUrl
-      a.download = `${title.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}.${format}`
+      a.download = `${title.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}.${ext}`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -763,8 +927,24 @@ function ExportDialog({
           )}
         </div>
 
-        {/* Background + effective resolution */}
-        <div className="flex items-center justify-between -mt-1">
+        {/* Include matrix + background */}
+        <div className="flex flex-col gap-2 -mt-1">
+          {matrixData && (
+            <label className="inline-flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={includeMatrix}
+                onChange={(e) => {
+                  setIncludeMatrix(e.target.checked)
+                  if (e.target.checked) setFormat('png')
+                }}
+                className="h-3.5 w-3.5 rounded border-gray-300 accent-primary"
+              />
+              Include pairwise comparison matrix
+              <span className="text-[10px] text-gray-400">(PNG only)</span>
+            </label>
+          )}
+        <div className="flex items-center justify-between">
           <label className="inline-flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
             <input
               type="checkbox"
@@ -778,6 +958,7 @@ function ExportDialog({
             {effectivePixels}
             {format === 'svg' && ' · vector'}
           </span>
+        </div>
         </div>
 
         {/* Live preview */}
@@ -980,28 +1161,18 @@ interface ProcessedGroup {
 
 function PairwiseMatrix({
   groups,
+  pairStats,
   groupBy,
+  nPairs,
 }: {
   groups: ProcessedGroup[]
+  pairStats: Map<string, { eps: number; pAdj: number }>
   groupBy: GroupBy
+  nPairs: number
 }) {
   if (groups.length < 2) return null
 
   const labels = groups.map((g) => getGroupLabel(groupBy, g.group))
-  const k = groups.length
-  const nPairs = (k * (k - 1)) / 2
-
-  // Pre-compute all pairwise stats and apply Bonferroni correction
-  const pairStats = useMemo(() => {
-    const map = new Map<string, { eps: number; pAdj: number }>()
-    for (let a = 0; a < k; a++) {
-      for (let b = 0; b < a; b++) {
-        const { eps, pRaw } = computeKwPair(groups[a].values, groups[b].values)
-        map.set(`${a}-${b}`, { eps, pAdj: Math.min(1, pRaw * nPairs) })
-      }
-    }
-    return map
-  }, [groups, k, nPairs])
 
   return (
     <div className="rounded-xl border border-gray-100 bg-white overflow-hidden">
@@ -1102,22 +1273,26 @@ function PairwiseMatrix({
       <div className="px-4 py-3 border-t border-gray-100 flex flex-wrap gap-x-6 gap-y-2">
         {/* Effect size gradient */}
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">ε² effect size</span>
-          <div className="flex items-center gap-1.5">
-            <div className="flex h-3 rounded overflow-hidden" style={{ width: 120 }}>
-              {[0, 0.05, 0.1, 0.2, 0.4, 0.6, 0.85].map((a, idx) => (
-                <div key={idx} className="flex-1" style={{ backgroundColor: `rgba(54,116,246,${a})` }} />
-              ))}
-            </div>
-            <div className="flex text-[9px] text-gray-400 gap-2">
-              <span>0</span>
-              <span style={{ marginLeft: 18 }}>0.06</span>
-              <span style={{ marginLeft: 6 }}>0.14</span>
-              <span style={{ marginLeft: 8 }}>1</span>
-            </div>
+          <span className="text-[10px] font-semibold text-gray-500 tracking-wider">
+            ε<sup>2</sup> EFFECT SIZE
+          </span>
+          <div
+            className="h-3 rounded"
+            style={{
+              width: 160,
+              background: 'linear-gradient(to right, rgba(54,116,246,0), rgba(54,116,246,0.3) 30%, rgba(54,116,246,0.7) 70%, rgba(54,116,246,0.85))',
+            }}
+          />
+          <div className="relative text-[9px] text-gray-400" style={{ width: 160, height: 14 }}>
+            <span className="absolute left-0">0</span>
+            <span className="absolute" style={{ left: '30%', transform: 'translateX(-50%)' }}>0.06</span>
+            <span className="absolute" style={{ left: '70%', transform: 'translateX(-50%)' }}>0.14</span>
+            <span className="absolute right-0">1</span>
           </div>
-          <div className="flex text-[9px] text-gray-400 gap-3">
-            <span>negligible</span><span>small</span><span>medium</span><span>large</span>
+          <div className="relative text-[9px] text-gray-400" style={{ width: 160, height: 13 }}>
+            <span className="absolute" style={{ left: '8%', transform: 'translateX(-50%)' }}>negligible</span>
+            <span className="absolute" style={{ left: '50%', transform: 'translateX(-50%)' }}>small</span>
+            <span className="absolute" style={{ left: '85%', transform: 'translateX(-50%)' }}>large</span>
           </div>
         </div>
 
@@ -1179,6 +1354,7 @@ function DistributionTab({
   const [removeOutliers, setRemoveOutliers] = useState(true)
   const [showGridlines, setShowGridlines] = useState(false)
   const [showExport, setShowExport] = useState(false)
+  const [showSigBars, setShowSigBars] = useState(false)
   const [strataBy, setStrataBy] = useState('')
   const plotContainerRef = useRef<HTMLDivElement>(null)
 
@@ -1447,6 +1623,23 @@ function DistributionTab({
     }))
   }, [processedGroups, chartType])
 
+  const nPairs = useMemo(() => {
+    const k = processedGroups.length
+    return (k * (k - 1)) / 2
+  }, [processedGroups.length])
+
+  const pairStats = useMemo(() => {
+    const k = processedGroups.length
+    const map = new Map<string, { eps: number; pAdj: number }>()
+    for (let a = 0; a < k; a++) {
+      for (let b = 0; b < a; b++) {
+        const { eps, pRaw } = computeKwPair(processedGroups[a].values, processedGroups[b].values)
+        map.set(`${a}-${b}`, { eps, pAdj: Math.min(1, pRaw * nPairs) })
+      }
+    }
+    return map
+  }, [processedGroups, nPairs])
+
   const statsRows = useMemo(() => {
     return processedGroups.map((g) => {
       const ciMargin = g.n > 0 ? 1.96 * (g.sd / Math.sqrt(g.n)) : 0
@@ -1468,6 +1661,43 @@ function DistributionTab({
 
   const unit = selectedMeta?.unit ?? ''
   const isXOriented = chartType === 'histogram' || chartType === 'density'
+
+  const sigBarElements = useMemo(() => {
+    const empty = { shapes: [] as object[], annotations: [] as object[], yMax: null as number | null }
+    if (!showSigBars || processedGroups.length < 2 || isXOriented) return empty
+    const allVals = processedGroups.flatMap((g) => g.values)
+    if (!allVals.length) return empty
+    const allMax = Math.max(...allVals)
+    const allMin = Math.min(...allVals)
+    const range = Math.max(allMax - allMin, 1)
+    const step = range * 0.09
+    const baseY = allMax + range * 0.04
+    const shapes: object[] = []
+    const annots: object[] = []
+    let nDrawn = 0
+    for (let gi = 1; gi < processedGroups.length; gi++) {
+      const s = pairStats.get(`${gi}-0`)
+      if (!s) continue
+      const stars = s.pAdj < 0.001 ? '***' : s.pAdj < 0.01 ? '**' : s.pAdj < 0.05 ? '*' : null
+      if (!stars) continue
+      nDrawn++
+      const y = baseY + step * (gi - 1)
+      shapes.push(
+        { type: 'line', x0: 0, y0: y, x1: gi, y1: y, xref: 'x', yref: 'y', line: { color: '#374151', width: 1.5 } },
+        { type: 'line', x0: 0, y0: y - step * 0.25, x1: 0, y1: y, xref: 'x', yref: 'y', line: { color: '#374151', width: 1.5 } },
+        { type: 'line', x0: gi, y0: y - step * 0.25, x1: gi, y1: y, xref: 'x', yref: 'y', line: { color: '#374151', width: 1.5 } },
+      )
+      annots.push({
+        x: gi / 2, y: y + step * 0.1,
+        xref: 'x', yref: 'y',
+        text: stars, showarrow: false,
+        font: { size: 13, color: '#374151', family: '"Red Hat Display", sans-serif' },
+        yanchor: 'bottom',
+      })
+    }
+    const yMax = nDrawn > 0 ? baseY + step * processedGroups.length + range * 0.02 : null
+    return { shapes, annotations: annots, yMax }
+  }, [showSigBars, processedGroups, pairStats, isXOriented])
 
   return (
     <div className="space-y-4">
@@ -1618,6 +1848,18 @@ function DistributionTab({
           Remove outliers
         </label>
 
+        {!isXOriented && processedGroups.length >= 2 && (
+          <label className="inline-flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showSigBars}
+              onChange={(e) => setShowSigBars(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-gray-300 accent-primary"
+            />
+            p-value bars
+          </label>
+        )}
+
         <label className="inline-flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
           <input
             type="checkbox"
@@ -1688,10 +1930,17 @@ function DistributionTab({
                     : chartType === 'density'
                       ? { text: 'Density', font: { size: 11 } }
                       : undefined,
+                ...(sigBarElements.yMax != null ? { range: [
+                  Math.min(...processedGroups.flatMap((g) => g.values)) - Math.max(Math.max(...processedGroups.flatMap((g) => g.values)) - Math.min(...processedGroups.flatMap((g) => g.values)), 1) * 0.05,
+                  sigBarElements.yMax,
+                ] } : {}),
               },
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              shapes: sigBarElements.shapes as any,
               legend: { orientation: 'h' as const, y: -0.3, x: 0.5, xanchor: 'center' as const, font: { size: 11 } },
-              margin: { l: 60, r: 20, t: 20, b: 120 },
-              annotations,
+              margin: { l: 60, r: 20, t: showSigBars ? 40 : 20, b: 120 },
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              annotations: [...annotations, ...(sigBarElements.annotations as any[])],
             }}
             config={{ displayModeBar: false, responsive: true }}
             style={{ width: '100%', height: '100%' }}
@@ -1705,12 +1954,23 @@ function DistributionTab({
           plotRef={plotContainerRef}
           title={selectedMeta?.label || 'distribution'}
           onClose={() => setShowExport(false)}
+          matrixData={processedGroups.length >= 2 ? {
+            groups: processedGroups,
+            pairStats,
+            labels: processedGroups.map((g) => getGroupLabel(groupBy, g.group)),
+            nPairs,
+          } : undefined}
         />
       )}
 
       {/* Pairwise comparison matrix */}
       {processedGroups.length >= 2 && (
-        <PairwiseMatrix groups={processedGroups} groupBy={groupBy} />
+        <PairwiseMatrix
+          groups={processedGroups}
+          pairStats={pairStats}
+          groupBy={groupBy}
+          nPairs={nPairs}
+        />
       )}
 
       {/* Summary stats table */}
