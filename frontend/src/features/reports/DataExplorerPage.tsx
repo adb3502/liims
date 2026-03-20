@@ -924,6 +924,161 @@ function buildDensityScales(values: number[]): number[] {
   })
 }
 
+/** Kruskal-Wallis epsilon-squared effect size for exactly two groups.
+ *  ε² = H / (N − 1) where H is the KW statistic on the combined ranks. */
+function computeKwEffectSize(vals1: number[], vals2: number[]): number {
+  const n1 = vals1.length
+  const n2 = vals2.length
+  const N = n1 + n2
+  if (n1 < 2 || n2 < 2) return 0
+  const combined = [
+    ...vals1.map((v) => ({ v, g: 0 })),
+    ...vals2.map((v) => ({ v, g: 1 })),
+  ].sort((a, b) => a.v - b.v)
+  const ranks = new Array(N).fill(0)
+  let i = 0
+  while (i < N) {
+    let j = i
+    while (j < N - 1 && combined[j + 1].v === combined[j].v) j++
+    const avgRank = (i + j) / 2 + 1
+    for (let k = i; k <= j; k++) ranks[k] = avgRank
+    i = j + 1
+  }
+  let R1 = 0
+  for (let k = 0; k < N; k++) if (combined[k].g === 0) R1 += ranks[k]
+  const R2 = (N * (N + 1)) / 2 - R1
+  const H = (12 / (N * (N + 1))) * (R1 * R1 / n1 + R2 * R2 / n2) - 3 * (N + 1)
+  return Math.max(0, Math.min(1, H / (N - 1)))
+}
+
+function effectSizeLabel(e: number): { label: string; className: string } {
+  if (e < 0.01) return { label: 'neg.', className: 'text-gray-400' }
+  if (e < 0.06) return { label: 'small', className: 'text-blue-400' }
+  if (e < 0.14) return { label: 'med.', className: 'text-blue-600' }
+  return { label: 'large', className: 'text-blue-800' }
+}
+
+interface ProcessedGroup {
+  group: string
+  values: number[]
+  median: number
+  n: number
+  [key: string]: unknown
+}
+
+function PairwiseMatrix({
+  groups,
+  groupBy,
+}: {
+  groups: ProcessedGroup[]
+  groupBy: GroupBy
+}) {
+  if (groups.length < 2) return null
+
+  const labels = groups.map((g) => getGroupLabel(groupBy, g.group))
+
+  return (
+    <div className="rounded-xl border border-gray-100 bg-white overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100">
+        <h3 className="text-xs font-semibold text-gray-700">Pairwise Comparisons</h3>
+        <p className="text-[10px] text-gray-400 mt-0.5">
+          Lower triangle: Kruskal-Wallis ε² effect size (neg. &lt;0.01 · small &lt;0.06 · medium &lt;0.14 · large ≥0.14).
+          Upper triangle: % change in median (column vs row).
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="text-xs border-collapse" aria-label="Pairwise comparison matrix">
+          <thead>
+            <tr>
+              {/* empty top-left corner */}
+              <th className="px-3 py-2 text-left text-gray-400 font-medium border-b border-gray-100" />
+              {labels.map((lbl, j) => (
+                <th
+                  key={j}
+                  className="px-3 py-2 text-center font-semibold text-gray-700 border-b border-gray-100 whitespace-nowrap"
+                >
+                  {lbl}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {groups.map((rowGroup, i) => (
+              <tr key={i} className="hover:bg-gray-50/50">
+                {/* Row header */}
+                <td className="px-3 py-2 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-100">
+                  {labels[i]}
+                </td>
+                {groups.map((colGroup, j) => {
+                  if (i === j) {
+                    // Diagonal — group label repeated with subtle bg
+                    return (
+                      <td
+                        key={j}
+                        className="px-3 py-2 text-center bg-gray-50 text-gray-400 font-medium"
+                      >
+                        {labels[i]}
+                      </td>
+                    )
+                  }
+                  if (j > i) {
+                    // Upper triangle — % change in median (col vs row)
+                    const pct =
+                      rowGroup.median !== 0
+                        ? ((colGroup.median - rowGroup.median) / Math.abs(rowGroup.median)) * 100
+                        : 0
+                    const isPos = pct > 0
+                    const absPct = Math.abs(pct)
+                    // Color intensity: 0→white, high→saturated
+                    const alpha = Math.min(0.85, absPct / 50)
+                    const bg = isPos
+                      ? `rgba(5,150,105,${alpha})`   // green-600
+                      : `rgba(220,38,38,${alpha})`   // red-600
+                    const textColor = absPct > 25 ? 'white' : isPos ? '#065F46' : '#991B1B'
+                    return (
+                      <td
+                        key={j}
+                        className="px-3 py-2 text-center tabular-nums font-medium"
+                        style={{ backgroundColor: bg, color: textColor }}
+                        title={`Median change from ${labels[i]} to ${labels[j]}: ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`}
+                      >
+                        {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
+                      </td>
+                    )
+                  }
+                  // Lower triangle — KW ε² effect size (row vs col)
+                  const eps = computeKwEffectSize(rowGroup.values, colGroup.values)
+                  const alpha = Math.min(0.85, eps / 0.2)
+                  const bg = `rgba(54,116,246,${alpha})`
+                  const textColor = eps > 0.12 ? 'white' : '#1E3A8A'
+                  const { label: esLabel, className: esClass } = effectSizeLabel(eps)
+                  return (
+                    <td
+                      key={j}
+                      className="px-3 py-2 text-center tabular-nums"
+                      style={{ backgroundColor: bg, color: textColor }}
+                      title={`KW ε² between ${labels[i]} and ${labels[j]}: ${eps.toFixed(3)}`}
+                    >
+                      <span className="font-semibold">{eps.toFixed(3)}</span>
+                      <span className={cn('ml-1 text-[9px]', eps > 0.12 ? 'text-blue-100' : esClass)}>
+                        {esLabel}
+                      </span>
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="px-4 py-2 text-[10px] text-gray-400 border-t border-gray-100">
+        ε² = Kruskal-Wallis H / (N − 1). % change = (median<sub>col</sub> − median<sub>row</sub>) / |median<sub>row</sub>| × 100.
+        Computed on {'{'}outlier-filtered{'}'} values.
+      </p>
+    </div>
+  )
+}
+
 function DistributionTab({
   parameters,
   filters,
@@ -1468,6 +1623,11 @@ function DistributionTab({
           title={selectedMeta?.label || 'distribution'}
           onClose={() => setShowExport(false)}
         />
+      )}
+
+      {/* Pairwise comparison matrix */}
+      {processedGroups.length >= 2 && (
+        <PairwiseMatrix groups={processedGroups} groupBy={groupBy} />
       )}
 
       {/* Summary stats table */}
