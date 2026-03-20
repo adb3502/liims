@@ -924,13 +924,13 @@ function buildDensityScales(values: number[]): number[] {
   })
 }
 
-/** Kruskal-Wallis epsilon-squared effect size for exactly two groups.
- *  ε² = H / (N − 1) where H is the KW statistic on the combined ranks. */
-function computeKwEffectSize(vals1: number[], vals2: number[]): number {
+/** Kruskal-Wallis H statistic + epsilon-squared for exactly two groups.
+ *  ε² = H / (N − 1). H ~ χ²(1) → p-value via chi-squared survival function. */
+function computeKwPair(vals1: number[], vals2: number[]): { eps: number; H: number; pRaw: number } {
   const n1 = vals1.length
   const n2 = vals2.length
   const N = n1 + n2
-  if (n1 < 2 || n2 < 2) return 0
+  if (n1 < 2 || n2 < 2) return { eps: 0, H: 0, pRaw: 1 }
   const combined = [
     ...vals1.map((v) => ({ v, g: 0 })),
     ...vals2.map((v) => ({ v, g: 1 })),
@@ -947,15 +947,27 @@ function computeKwEffectSize(vals1: number[], vals2: number[]): number {
   let R1 = 0
   for (let k = 0; k < N; k++) if (combined[k].g === 0) R1 += ranks[k]
   const R2 = (N * (N + 1)) / 2 - R1
-  const H = (12 / (N * (N + 1))) * (R1 * R1 / n1 + R2 * R2 / n2) - 3 * (N + 1)
-  return Math.max(0, Math.min(1, H / (N - 1)))
+  const H = Math.max(0, (12 / (N * (N + 1))) * (R1 * R1 / n1 + R2 * R2 / n2) - 3 * (N + 1))
+  const eps = Math.min(1, H / (N - 1))
+  // p-value: H ~ chi²(1). Use p = erfc(sqrt(H/2)) via erfc approximation.
+  const pRaw = erfcApprox(Math.sqrt(H / 2))
+  return { eps, H, pRaw }
 }
 
-function effectSizeLabel(e: number): { label: string; className: string } {
-  if (e < 0.01) return { label: 'neg.', className: 'text-gray-400' }
-  if (e < 0.06) return { label: 'small', className: 'text-blue-400' }
-  if (e < 0.14) return { label: 'med.', className: 'text-blue-600' }
-  return { label: 'large', className: 'text-blue-800' }
+/** Complementary error function approximation (Horner form, max error < 1.5e-7) */
+function erfcApprox(x: number): number {
+  if (x < 0) return 2 - erfcApprox(-x)
+  const t = 1 / (1 + 0.3275911 * x)
+  const poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))))
+  return poly * Math.exp(-x * x)
+}
+
+/** Format Bonferroni-corrected p-value for display */
+function formatPAdj(p: number): string {
+  if (p >= 0.05) return 'ns'
+  if (p < 0.0001) return 'p < 0.0001'
+  if (p < 0.001) return `p = ${p.toFixed(4)}`
+  return `p = ${p.toFixed(3)}`
 }
 
 interface ProcessedGroup {
@@ -976,26 +988,40 @@ function PairwiseMatrix({
   if (groups.length < 2) return null
 
   const labels = groups.map((g) => getGroupLabel(groupBy, g.group))
+  const k = groups.length
+  const nPairs = (k * (k - 1)) / 2
+
+  // Pre-compute all pairwise stats and apply Bonferroni correction
+  const pairStats = useMemo(() => {
+    const map = new Map<string, { eps: number; pAdj: number }>()
+    for (let a = 0; a < k; a++) {
+      for (let b = 0; b < a; b++) {
+        const { eps, pRaw } = computeKwPair(groups[a].values, groups[b].values)
+        map.set(`${a}-${b}`, { eps, pAdj: Math.min(1, pRaw * nPairs) })
+      }
+    }
+    return map
+  }, [groups, k, nPairs])
 
   return (
     <div className="rounded-xl border border-gray-100 bg-white overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100">
         <h3 className="text-xs font-semibold text-gray-700">Pairwise Comparisons</h3>
         <p className="text-[10px] text-gray-400 mt-0.5">
-          Lower triangle: Kruskal-Wallis ε² effect size (neg. &lt;0.01 · small &lt;0.06 · medium &lt;0.14 · large ≥0.14).
+          Lower triangle: KW ε² effect size with Bonferroni-corrected p-value.
           Upper triangle: % change in median (column vs row).
         </p>
       </div>
+
       <div className="overflow-x-auto">
         <table className="text-xs border-collapse" aria-label="Pairwise comparison matrix">
           <thead>
             <tr>
-              {/* empty top-left corner */}
-              <th className="px-3 py-2 text-left text-gray-400 font-medium border-b border-gray-100" />
+              <th className="px-3 py-2.5 text-left text-gray-400 font-medium border-b border-gray-100" />
               {labels.map((lbl, j) => (
                 <th
                   key={j}
-                  className="px-3 py-2 text-center font-semibold text-gray-700 border-b border-gray-100 whitespace-nowrap"
+                  className="px-3 py-2.5 text-center font-semibold text-gray-700 border-b border-gray-100 whitespace-nowrap"
                 >
                   {lbl}
                 </th>
@@ -1004,65 +1030,65 @@ function PairwiseMatrix({
           </thead>
           <tbody className="divide-y divide-gray-50">
             {groups.map((rowGroup, i) => (
-              <tr key={i} className="hover:bg-gray-50/50">
-                {/* Row header */}
-                <td className="px-3 py-2 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-100">
+              <tr key={i}>
+                <td className="px-3 py-2.5 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-100">
                   {labels[i]}
                 </td>
                 {groups.map((colGroup, j) => {
                   if (i === j) {
-                    // Diagonal — group label repeated with subtle bg
                     return (
-                      <td
-                        key={j}
-                        className="px-3 py-2 text-center bg-gray-50 text-gray-400 font-medium"
-                      >
+                      <td key={j} className="px-3 py-2.5 text-center bg-gray-50 text-gray-500 font-semibold">
                         {labels[i]}
                       </td>
                     )
                   }
+
                   if (j > i) {
-                    // Upper triangle — % change in median (col vs row)
+                    // Upper triangle — % change in median
                     const pct =
                       rowGroup.median !== 0
                         ? ((colGroup.median - rowGroup.median) / Math.abs(rowGroup.median)) * 100
                         : 0
                     const isPos = pct > 0
                     const absPct = Math.abs(pct)
-                    // Color intensity: 0→white, high→saturated
                     const alpha = Math.min(0.85, absPct / 50)
-                    const bg = isPos
-                      ? `rgba(5,150,105,${alpha})`   // green-600
-                      : `rgba(220,38,38,${alpha})`   // red-600
+                    const bg = isPos ? `rgba(5,150,105,${alpha})` : `rgba(220,38,38,${alpha})`
                     const textColor = absPct > 25 ? 'white' : isPos ? '#065F46' : '#991B1B'
                     return (
                       <td
                         key={j}
-                        className="px-3 py-2 text-center tabular-nums font-medium"
+                        className="px-3 py-2.5 text-center tabular-nums font-semibold"
                         style={{ backgroundColor: bg, color: textColor }}
-                        title={`Median change from ${labels[i]} to ${labels[j]}: ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`}
+                        title={`% median change from ${labels[i]} to ${labels[j]}`}
                       >
                         {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
                       </td>
                     )
                   }
-                  // Lower triangle — KW ε² effect size (row vs col)
-                  const eps = computeKwEffectSize(rowGroup.values, colGroup.values)
+
+                  // Lower triangle — ε² + corrected p-value
+                  const stats = pairStats.get(`${i}-${j}`)!
+                  const { eps, pAdj } = stats
                   const alpha = Math.min(0.85, eps / 0.2)
                   const bg = `rgba(54,116,246,${alpha})`
-                  const textColor = eps > 0.12 ? 'white' : '#1E3A8A'
-                  const { label: esLabel, className: esClass } = effectSizeLabel(eps)
+                  const onDark = eps > 0.12
+                  const textColor = onDark ? 'white' : '#1E3A8A'
+                  const pText = formatPAdj(pAdj)
+                  const pSig = pAdj < 0.05
                   return (
                     <td
                       key={j}
                       className="px-3 py-2 text-center tabular-nums"
                       style={{ backgroundColor: bg, color: textColor }}
-                      title={`KW ε² between ${labels[i]} and ${labels[j]}: ${eps.toFixed(3)}`}
+                      title={`ε² = ${eps.toFixed(3)}, p_adj = ${pAdj.toFixed(4)} (Bonferroni, ${nPairs} pairs)`}
                     >
-                      <span className="font-semibold">{eps.toFixed(3)}</span>
-                      <span className={cn('ml-1 text-[9px]', eps > 0.12 ? 'text-blue-100' : esClass)}>
-                        {esLabel}
-                      </span>
+                      <div className="font-semibold leading-tight">{eps.toFixed(3)}</div>
+                      <div
+                        className="text-[10px] leading-tight mt-0.5"
+                        style={{ color: onDark ? (pSig ? '#FEF08A' : 'rgba(255,255,255,0.6)') : (pSig ? '#1D4ED8' : '#94A3B8') }}
+                      >
+                        {pText}
+                      </div>
                     </td>
                   )
                 })}
@@ -1071,9 +1097,66 @@ function PairwiseMatrix({
           </tbody>
         </table>
       </div>
-      <p className="px-4 py-2 text-[10px] text-gray-400 border-t border-gray-100">
-        ε² = Kruskal-Wallis H / (N − 1). % change = (median<sub>col</sub> − median<sub>row</sub>) / |median<sub>row</sub>| × 100.
-        Computed on {'{'}outlier-filtered{'}'} values.
+
+      {/* Legend */}
+      <div className="px-4 py-3 border-t border-gray-100 flex flex-wrap gap-x-6 gap-y-2">
+        {/* Effect size gradient */}
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">ε² effect size</span>
+          <div className="flex items-center gap-1.5">
+            <div className="flex h-3 rounded overflow-hidden" style={{ width: 120 }}>
+              {[0, 0.05, 0.1, 0.2, 0.4, 0.6, 0.85].map((a, idx) => (
+                <div key={idx} className="flex-1" style={{ backgroundColor: `rgba(54,116,246,${a})` }} />
+              ))}
+            </div>
+            <div className="flex text-[9px] text-gray-400 gap-2">
+              <span>0</span>
+              <span style={{ marginLeft: 18 }}>0.06</span>
+              <span style={{ marginLeft: 6 }}>0.14</span>
+              <span style={{ marginLeft: 8 }}>1</span>
+            </div>
+          </div>
+          <div className="flex text-[9px] text-gray-400 gap-3">
+            <span>negligible</span><span>small</span><span>medium</span><span>large</span>
+          </div>
+        </div>
+
+        <div className="w-px bg-gray-100 self-stretch" />
+
+        {/* % change gradient */}
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">% median change</span>
+          <div className="flex items-center gap-1.5">
+            <div className="flex h-3 rounded overflow-hidden" style={{ width: 120 }}>
+              {[0.85, 0.6, 0.3, 0.05, 0.3, 0.6, 0.85].map((a, idx) => (
+                <div
+                  key={idx}
+                  className="flex-1"
+                  style={{ backgroundColor: idx < 3 ? `rgba(220,38,38,${a})` : idx === 3 ? '#f9fafb' : `rgba(5,150,105,${a})` }}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="flex text-[9px] text-gray-400 gap-3 justify-between" style={{ width: 120 }}>
+            <span>−50%+</span><span>0</span><span>+50%+</span>
+          </div>
+        </div>
+
+        <div className="w-px bg-gray-100 self-stretch" />
+
+        {/* p-value key */}
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">p-value (Bonferroni)</span>
+          <div className="flex flex-col gap-0.5 text-[10px] text-gray-500">
+            <span><span className="font-semibold text-blue-700">p &lt; 0.05</span> — significant</span>
+            <span><span className="font-semibold text-gray-400">ns</span> — not significant (p ≥ 0.05)</span>
+          </div>
+        </div>
+      </div>
+
+      <p className="px-4 pb-2 text-[10px] text-gray-400">
+        ε² = H / (N − 1) where H is the Kruskal-Wallis statistic. p-values from χ²(1) distribution, Bonferroni-corrected for {nPairs} pairwise comparisons.
+        Computed on outlier-filtered values.
       </p>
     </div>
   )
