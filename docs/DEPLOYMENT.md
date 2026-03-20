@@ -270,32 +270,117 @@ Add a cron job (Linux) or Task Scheduler entry (Windows):
 
 ## Auto-Start on System Restart
 
-All Docker services are configured with `restart: unless-stopped`, so they restart automatically whenever Docker Desktop is running. Two steps are required after a fresh install.
+There are two modes for persistent auto-start on Windows. **Option A (recommended for servers)** keeps LIMS running even when no user is logged in. **Option B** is simpler but requires a user session.
 
-### Step 1 — Enable Docker Desktop auto-start
+---
+
+### Option A — WSL2 + Docker Engine + systemd (persistent, recommended)
+
+This runs LIMS as a Linux systemd service inside WSL2 Ubuntu. Docker Engine runs as a background daemon independent of Docker Desktop and Windows user sessions. LIMS stays up even when you sign out of Windows.
+
+#### Prerequisites
+
+- WSL2 with Ubuntu 24.04 installed: `wsl --install -d Ubuntu-24.04`
+- systemd enabled in WSL2 — add to `/etc/wsl.conf` inside Ubuntu:
+  ```ini
+  [boot]
+  systemd=true
+  ```
+  Then restart: `wsl --shutdown`
+
+#### 1. Install Docker Engine inside Ubuntu
+
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+sudo systemctl enable docker
+```
+
+#### 2. Create the systemd service
+
+```bash
+sudo tee /etc/systemd/system/liims.service > /dev/null << 'EOF'
+[Unit]
+Description=LIIMS Docker Compose Stack
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/mnt/d/Users/adb/dev/bharat-study/lims
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+TimeoutStartSec=120
+User=adb
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable liims.service
+```
+
+Replace `WorkingDirectory` path and `User` with your own values.
+
+#### 3. Build images (one-time, must be done before enabling the service)
+
+```bash
+cd /mnt/d/Users/adb/dev/bharat-study/lims
+docker compose build
+```
+
+#### 4. Register WSL2 boot task in Windows Task Scheduler (one-time, run as Administrator)
+
+```powershell
+$Action = New-ScheduledTaskAction -Execute 'wsl.exe' -Argument '-d Ubuntu-24.04 -u root -- systemctl start liims.service'
+$Trigger = New-ScheduledTaskTrigger -AtStartup
+$Principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+$Settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
+Register-ScheduledTask -TaskName 'LIIMS-WSL2-Boot' -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Force
+```
+
+This ensures Ubuntu-24.04 (and therefore the LIMS service) starts at Windows boot under the SYSTEM account, before any user logs in.
+
+#### Managing the service
+
+```bash
+# Inside Ubuntu-24.04 WSL session:
+sudo systemctl start liims.service    # Start
+sudo systemctl stop liims.service     # Stop
+sudo systemctl status liims.service   # Status
+journalctl -u liims.service -n 50     # Logs
+```
+
+---
+
+### Option B — Docker Desktop + Windows Startup script (per-session)
+
+This is simpler but LIMS stops when the user signs out.
+
+#### Step 1 — Enable Docker Desktop auto-start
 
 Open Docker Desktop → Settings (gear icon) → General → enable **"Start Docker Desktop when you log in"**.
 
-### Step 2 — Install the LIIMS startup script (one-time)
+#### Step 2 — Register the startup task (one-time, run as Administrator)
 
 ```powershell
 cd D:\Users\adb\dev\bharat-study\lims
-powershell -ExecutionPolicy Bypass -File scripts\install-startup.ps1
+powershell -ExecutionPolicy Bypass -File scripts\register-startup-task.ps1
 ```
 
-This places a shortcut in the Windows Startup folder. On every login it:
+This registers a Task Scheduler entry that runs at login, waits for Docker Engine, then runs `docker compose up -d`. Logs go to `logs\startup.log`.
 
-1. Waits up to 3 minutes for Docker Engine to become ready
-2. Runs `docker compose up -d`
-3. Logs output to `logs\startup.log`
+To uninstall: `Unregister-ScheduledTask -TaskName 'LIIMS Auto-Start' -Confirm:$false`
 
-To uninstall, delete `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\LIIMS.lnk`.
+---
 
 ### Verify after reboot
 
 ```bash
 docker compose ps
-curl http://localhost/api/health
+curl http://localhost:3080/api/health
 ```
 
 ---
@@ -449,6 +534,29 @@ docker compose exec api alembic history
 
 # Check for pending migrations
 docker compose exec api alembic heads
+```
+
+### DatatypeMismatchError on enum columns (after pg_restore)
+
+If you restore a database from a backup made with an older schema, PostgreSQL native enum types may conflict with the current VARCHAR-based schema. Migration 008 fixes this automatically — run it if you see errors like `column "action" is of type auditaction`:
+
+```bash
+docker compose exec api alembic upgrade head
+```
+
+Migration 008 converts all native enum columns to `VARCHAR(50)`, normalises values to lowercase, converts `age_group` to `INTEGER` (values 1–5), and converts `sex` to `VARCHAR(1)` (values `M`/`F`).
+
+### Participants page returns 500 after database restore
+
+Most likely cause: `age_group` column reverted to a string type or `sex` values are lowercase. Fix:
+
+```bash
+docker compose exec -T postgres psql -U liims -d liims << 'SQL'
+-- Ensure age_group is INTEGER
+ALTER TABLE participant ALTER COLUMN age_group TYPE INTEGER USING age_group::INTEGER;
+-- Ensure sex is uppercase
+UPDATE participant SET sex = UPPER(sex) WHERE sex IN ('m','f');
+SQL
 ```
 
 ### SECRET_KEY error on startup

@@ -32,7 +32,7 @@ All 6 services run as Docker containers on a single `liims` bridge network. Ngin
 
 ## Prerequisites
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine + Docker Compose v2+)
+- Docker Desktop (or Docker Engine + Docker Compose v2+) — see [Deployment Guide](docs/DEPLOYMENT.md) for persistent server setup with WSL2
 - Git
 - 4 GB RAM minimum (8 GB recommended)
 - 20 GB free disk space
@@ -59,7 +59,7 @@ docker compose exec api python -m app.seed
 # Open http://localhost in your browser
 ```
 
-**Default login:** `adb` / `Admin@123`
+**Default login:** `amruthbhat@iisc.ac.in` / `Admin@123`
 
 For a scripted deployment with migrations and optional seeding:
 

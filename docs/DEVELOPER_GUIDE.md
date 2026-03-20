@@ -77,9 +77,9 @@ class BaseModel(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
 
 Log/history tables use `BaseModelNoSoftDelete` (no `is_deleted` column).
 
-**Enums** (`app/models/enums.py`): All enum types in one file -- `UserRole`, `SampleType`, `SampleStatus`, `FreezerType`, `BoxType`, `AuditAction`, `NotificationType`, and many more. Python `enum.Enum` subclasses that map to PostgreSQL enum columns.
+**Enums** (`app/models/enums.py`): All enum types in one file. All enums are stored as `VARCHAR(50)` in PostgreSQL — **never** as native PostgreSQL enum types. The `type_annotation_map` in `app/models/base.py` enforces this for every `str, enum.Enum` subclass. `AgeGroup` is the sole exception: it is `int, enum.Enum` and maps to `Integer()` (DB values 1–5).
 
-`UserRole` values (as of migration 005): `SUPER_ADMIN`, `LII_PI_RESEARCHER`, `SCIENTIST`, `ICMR_CAR_JRF`, `ICMR_CAR_POSTDOC`, `FIELD_OPERATIVE`, `CLINICAL_TEAM`, `CLINICAL_PARTNER`, `PI_RESEARCHER`.
+`UserRole` values: `super_admin`, `lii_pi_researcher`, `scientist`, `icmr_car_jrf`, `icmr_car_postdoc`, `field_operative`, `clinical_team`, `clinical_partner`, `pi_researcher` (lowercase, as of migration 007).
 
 **Model files**:
 

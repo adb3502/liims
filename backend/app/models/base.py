@@ -3,11 +3,43 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, func
+from sqlalchemy import Boolean, DateTime, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.enums import (
+    AgeGroup,
+    AuditAction, BoxMaterial, BoxType, ConsentType,
+    DashboardType, DiscardReason, DiscardRequestStatus, EnrollmentDateSource,
+    EnrollmentSource, FieldEventStatus, FieldEventType, FileCategory,
+    FreezerEventType, FreezerType, IccStatus, InstrumentType, MatchStatus,
+    NotificationSeverity, NotificationType, OdkProcessingStatus, OdkSyncStatus,
+    OdkTriggerType, OmicsResultType, PartnerName, QCStatus, ReportType,
+    RunStatus, RunType, SampleStatus, SampleType, SettingValueType, Sex,
+    StoolKitStatus, SyncStatus, TransportType, UserRole,
+)
+
+# AgeGroup is int enum — stored as INTEGER in PostgreSQL.
+# All other enums are str enums — stored as VARCHAR(50).
+Base.registry.update_type_annotation_map(
+    {
+        AgeGroup: Integer(),
+        **{
+            t: String(50)
+            for t in (
+                AuditAction, BoxMaterial, BoxType, ConsentType,
+                DashboardType, DiscardReason, DiscardRequestStatus, EnrollmentDateSource,
+                EnrollmentSource, FieldEventStatus, FieldEventType, FileCategory,
+                FreezerEventType, FreezerType, IccStatus, InstrumentType, MatchStatus,
+                NotificationSeverity, NotificationType, OdkProcessingStatus, OdkSyncStatus,
+                OdkTriggerType, OmicsResultType, PartnerName, QCStatus, ReportType,
+                RunStatus, RunType, SampleStatus, SampleType, SettingValueType, Sex,
+                StoolKitStatus, SyncStatus, TransportType, UserRole,
+            )
+        },
+    }
+)
 
 
 class TimestampMixin:
