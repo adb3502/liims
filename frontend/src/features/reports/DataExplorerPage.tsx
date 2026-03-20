@@ -98,10 +98,11 @@ const CHART_TYPE_LABELS: Record<ChartType, string> = {
 const GROUP_BY_OPTIONS = [
   { value: 'age_group', label: 'Age Group' },
   { value: 'sex', label: 'Sex' },
+  { value: 'age_sex', label: 'Age × Sex' },
   { value: 'site', label: 'Centre' },
   { value: 'site_type', label: 'Site' },
 ] as const
-type GroupBy = 'age_group' | 'sex' | 'site' | 'site_type'
+type GroupBy = 'age_group' | 'sex' | 'age_sex' | 'site' | 'site_type'
 
 const COLOR_PALETTES = {
   default: { label: 'Default (BHARAT)', colors: ['#3674F6', '#03B6D9', '#8B5CF6', '#F97316', '#059669', '#EC4899', '#6366F1', '#14B8A6'] },
@@ -116,7 +117,6 @@ const COLOR_BY_OPTIONS = [
   { value: 'group', label: 'Default' },
   { value: 'age_group', label: 'Age Group' },
   { value: 'sex', label: 'Sex' },
-  { value: 'age_sex', label: 'Age + Sex' },
   { value: 'age_sex', label: 'Age + Sex' },
   { value: 'site', label: 'Centre' },
   { value: 'site_type', label: 'Site (Urban/Rural)' },
@@ -992,16 +992,37 @@ function ExportDialog({
 
 // ---- Distribution Tab ----
 
+function lightenColor(hex: string, amount: number): string {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  const nr = Math.round(r + (255 - r) * amount)
+  const ng = Math.round(g + (255 - g) * amount)
+  const nb = Math.round(b + (255 - b) * amount)
+  return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`
+}
+
 function getGroupColor(groupBy: GroupBy, groupKey: string, index: number): string {
   if (groupBy === 'age_group') return AGE_GROUP_COLORS[groupKey] || COLORS.primary
   if (groupBy === 'sex') return groupKey === 'A' || groupKey === 'Male' ? SEX_COLORS.Male : SEX_COLORS.Female
   if (groupBy === 'site_type') return groupKey === 'Urban' ? '#3674F6' : '#059669'
+  if (groupBy === 'age_sex') {
+    const ageNum = groupKey.slice(0, -1)
+    const isMale = groupKey.endsWith('A')
+    const base = AGE_GROUP_COLORS[ageNum] || COLORS.primary
+    return isMale ? base : lightenColor(base, 0.38)
+  }
   return SITE_COLORS[index % SITE_COLORS.length]
 }
 
 function getGroupLabel(groupBy: GroupBy, groupKey: string): string {
   if (groupBy === 'age_group') return AGE_GROUP_LABELS[groupKey] || groupKey
   if (groupBy === 'sex') return groupKey === 'A' ? 'Male' : groupKey === 'B' ? 'Female' : groupKey
+  if (groupBy === 'age_sex') {
+    const ageNum = groupKey.slice(0, -1)  // '1A' → '1'
+    const isMale = groupKey.endsWith('A')
+    return `${AGE_GROUP_LABELS[ageNum] || ageNum} ${isMale ? '♂' : '♀'}`
+  }
   return groupKey
 }
 
@@ -1072,6 +1093,14 @@ function getColorCategory(pt: RawDataPoint, colorByDim: ColorBy): string {
 function deterministicJitter(pointIndex: number, groupIndex: number, offset = 0, spread = 0.15, densityScale = 1): number {
   const seed = ((pointIndex * 2654435761 + groupIndex * 1597334677) >>> 0) % 10000
   return offset + (seed / 10000 - 0.5) * spread * densityScale
+}
+
+/** X-axis position for age_sex groups: pairs are clustered with 0.7 gap inside a group,
+ *  1.1 gap between age groups (index 0=1M,1=1F,2=2M,3=2F,...,8=5M,9=5F) */
+function getAgeSexXPos(groupIndex: number): number {
+  const ageIdx = Math.floor(groupIndex / 2)
+  const isFemale = groupIndex % 2 === 1
+  return ageIdx * 1.8 + (isFemale ? 0.7 : 0)
 }
 
 /** Build a fast density lookup: for each value in `values`, return 0-1 scale
@@ -1362,8 +1391,8 @@ function DistributionTab({
 
   // For violin/box/density we always fetch with chartType='box' to get raw values
   const fetchType = chartType === 'histogram' ? 'histogram' : 'box'
-  // site_type is a frontend-only grouping — fetch by site and regroup client-side
-  const apiGroupBy = groupBy === 'site_type' ? 'site' : groupBy
+  // site_type and age_sex are frontend-only groupings — fetch by site/age_group and regroup client-side
+  const apiGroupBy = groupBy === 'site_type' ? 'site' : groupBy === 'age_sex' ? 'age_group' : groupBy
 
   const { data: rawApiData, isLoading, isError } = useDataExplorerDistribution(
     parameter,
@@ -1374,25 +1403,52 @@ function DistributionTab({
     strataBy || undefined,
   )
 
-  // For site_type grouping, re-derive groups from rawData by Urban/Rural
+  // For site_type/age_sex grouping, re-derive groups from rawData by Urban/Rural or age+sex
   const data = useMemo(() => {
     if (!rawApiData) return undefined
-    if (groupBy !== 'site_type') return rawApiData
-    // Regroup raw data by urban/rural
-    if (!rawApiData.rawData?.length) return rawApiData
-    const typeMap = new Map<string, { values: number[]; pts: RawDataPoint[] }>()
-    for (const pt of rawApiData.rawData) {
-      const sType = CENTRE_SITE_TYPE[pt.site_code ?? ''] ?? 'Unknown'
-      const entry = typeMap.get(sType) ?? { values: [], pts: [] }
-      entry.values.push(pt.value)
-      entry.pts.push(pt)
-      typeMap.set(sType, entry)
+    if (groupBy === 'site_type') {
+      // Regroup raw data by urban/rural
+      if (!rawApiData.rawData?.length) return rawApiData
+      const typeMap = new Map<string, { values: number[]; pts: RawDataPoint[] }>()
+      for (const pt of rawApiData.rawData) {
+        const sType = CENTRE_SITE_TYPE[pt.site_code ?? ''] ?? 'Unknown'
+        const entry = typeMap.get(sType) ?? { values: [], pts: [] }
+        entry.values.push(pt.value)
+        entry.pts.push(pt)
+        typeMap.set(sType, entry)
+      }
+      const groups = Array.from(typeMap.entries()).map(([sType, { values }]) => {
+        const stats = computeStats(values)
+        return { group: sType, label: sType, ...stats, values }
+      })
+      return { ...rawApiData, groups, rawData: rawApiData.rawData }
     }
-    const groups = Array.from(typeMap.entries()).map(([sType, { values }]) => {
-      const stats = computeStats(values)
-      return { group: sType, label: sType, ...stats, values }
-    })
-    return { ...rawApiData, groups, rawData: rawApiData.rawData }
+    if (groupBy === 'age_sex') {
+      // Regroup raw data by age_group + sex (key = e.g. "1M", "1F")
+      if (!rawApiData.rawData?.length) return rawApiData
+      const ageSexMap = new Map<string, number[]>()
+      for (const pt of rawApiData.rawData) {
+        const key = `${pt.age_group}${pt.sex}`
+        const arr = ageSexMap.get(key) ?? []
+        arr.push(pt.value)
+        ageSexMap.set(key, arr)
+      }
+      // Sort keys: by age group number, then A (Male) before B (Female)
+      const sortedKeys = Array.from(ageSexMap.keys()).sort((a, b) => {
+        const ageA = parseInt(a)
+        const ageB = parseInt(b)
+        if (ageA !== ageB) return ageA - ageB
+        // 'A' (Male) before 'B' (Female)
+        return a.slice(-1) < b.slice(-1) ? -1 : 1
+      })
+      const groups = sortedKeys.map((key) => {
+        const values = ageSexMap.get(key)!
+        const stats = computeStats(values)
+        return { group: key, label: key, ...stats, values }
+      })
+      return { ...rawApiData, groups, rawData: rawApiData.rawData }
+    }
+    return rawApiData
   }, [rawApiData, groupBy])
 
   const selectedMeta = useMemo(
@@ -1409,6 +1465,7 @@ function DistributionTab({
       if (groupBy === 'age_group') gKey = String(pt.age_group)
       else if (groupBy === 'sex') gKey = pt.sex
       else if (groupBy === 'site_type') gKey = CENTRE_SITE_TYPE[pt.site_code ?? ''] ?? 'Unknown'
+      else if (groupBy === 'age_sex') gKey = `${pt.age_group}${pt.sex}`
       else gKey = pt.site_code || 'Unknown'
       const arr = map.get(gKey) ?? []
       arr.push(pt)
@@ -1479,11 +1536,12 @@ function DistributionTab({
       }
 
       processedGroups.forEach((g, i) => {
+        const xPos = groupBy === 'age_sex' ? getAgeSexXPos(i) : i
         const color = getPaletteColor(groupBy, g.group, i, palette)
         const label = getGroupLabel(groupBy, g.group)
 
         if (chartType === 'box') {
-          const boxX = (side && showPoints) ? i + 0.1 : i
+          const boxX = (side && showPoints) ? xPos + 0.1 : xPos
           shapeTraces.push({
             type: 'box' as const,
             name: label,
@@ -1506,7 +1564,7 @@ function DistributionTab({
           shapeTraces.push({
             type: 'violin' as const,
             name: label,
-            x: g.values.map(() => i),
+            x: g.values.map(() => xPos),
             y: g.values,
             scalegroup: label,
             width: useHalfSide ? 0.55 : 0.6,
@@ -1543,7 +1601,7 @@ function DistributionTab({
               pointTraces.push({
                 type: 'scatter' as const,
                 mode: 'markers' as const,
-                x: entries.map((e, j) => i + deterministicJitter(j, i, ptOffset, ptSpread, densityScales[e.idx])),
+                x: entries.map((e, j) => xPos + deterministicJitter(j, i, ptOffset, ptSpread, densityScales[e.idx])),
                 y: entries.map((e) => e.pt.value),
                 marker: { color: catColor, size: 4, opacity: 0.6, line: { width: 0, color: 'transparent' } },
                 name: cat,
@@ -1558,7 +1616,7 @@ function DistributionTab({
             pointTraces.push({
               type: 'scatter' as const,
               mode: 'markers' as const,
-              x: g.rawPoints.map((_, j) => i + deterministicJitter(j, i, ptOffset, ptSpread, densityScales[j])),
+              x: g.rawPoints.map((_, j) => xPos + deterministicJitter(j, i, ptOffset, ptSpread, densityScales[j])),
               y: g.rawPoints.map((p) => p.value),
               marker: { color, size: 4, opacity: 0.6, line: { width: 0, color: 'transparent' } },
               name: label,
@@ -1609,10 +1667,10 @@ function DistributionTab({
   }, [processedGroups, chartType, groupBy, colorBy, palette, showPoints, pointsSide])
 
   // N annotations for box/violin — shown below each trace (numeric x positions)
-  const annotations = useMemo(() => {
+  const annotations = useMemo((): object[] => {
     if (processedGroups.length === 0 || chartType === 'histogram' || chartType === 'density') return []
-    return processedGroups.map((g, i) => ({
-      x: i,
+    const result = processedGroups.map((g, i) => ({
+      x: groupBy === 'age_sex' ? getAgeSexXPos(i) : i,
       y: -0.15,
       xref: 'x' as const,
       yref: 'paper' as const,
@@ -1621,7 +1679,25 @@ function DistributionTab({
       font: { size: 10, color: '#1E293B', family: '"Red Hat Display", sans-serif' },
       xanchor: 'center' as const,
     }))
-  }, [processedGroups, chartType])
+    if (groupBy === 'age_sex' && processedGroups.length > 0) {
+      const AGE_LABELS = ['18–29', '30–44', '45–59', '60–74', '75+']
+      for (let ag = 0; ag < 5; ag++) {
+        const mPos = getAgeSexXPos(ag * 2)
+        const fPos = getAgeSexXPos(ag * 2 + 1)
+        result.push({
+          x: (mPos + fPos) / 2,
+          y: -0.26,
+          xref: 'x' as const,
+          yref: 'paper' as const,
+          text: AGE_LABELS[ag],
+          showarrow: false,
+          font: { size: 10, color: '#374151', family: '"Red Hat Display", sans-serif' },
+          xanchor: 'center' as const,
+        })
+      }
+    }
+    return result
+  }, [processedGroups, chartType, groupBy])
 
   const nPairs = useMemo(() => {
     const k = processedGroups.length
@@ -1681,13 +1757,24 @@ function DistributionTab({
       const isSig = label !== 'ns'
       const y = baseY + step * (gi - 1)
       const color = isSig ? '#374151' : '#9CA3AF'
+      const lw = isSig ? 1.5 : 1
+      const x0 = 0  // reference group is always index 0, xPos = getAgeSexXPos(0) = 0
+      const x1 = groupBy === 'age_sex' ? getAgeSexXPos(gi) : gi
+      const cx = (x0 + x1) / 2
+      // Fixed small gap — just enough for the label, 2-3 char spaces each side
+      const gapHalf = 0.10
       shapes.push(
-        { type: 'line', x0: 0, y0: y, x1: gi, y1: y, xref: 'x', yref: 'y', line: { color, width: isSig ? 1.5 : 1, dash: isSig ? 'solid' : 'dot' } },
-        { type: 'line', x0: 0, y0: y - step * 0.3, x1: 0, y1: y, xref: 'x', yref: 'y', line: { color, width: isSig ? 1.5 : 1 } },
-        { type: 'line', x0: gi, y0: y - step * 0.3, x1: gi, y1: y, xref: 'x', yref: 'y', line: { color, width: isSig ? 1.5 : 1 } },
+        // Left half of horizontal bracket
+        { type: 'line', x0, y0: y, x1: cx - gapHalf, y1: y, xref: 'x', yref: 'y', line: { color, width: lw } },
+        // Right half of horizontal bracket
+        { type: 'line', x0: cx + gapHalf, y0: y, x1, y1: y, xref: 'x', yref: 'y', line: { color, width: lw } },
+        // Left vertical tick
+        { type: 'line', x0, y0: y - step * 0.3, x1: x0, y1: y, xref: 'x', yref: 'y', line: { color, width: lw } },
+        // Right vertical tick
+        { type: 'line', x0: x1, y0: y - step * 0.3, x1, y1: y, xref: 'x', yref: 'y', line: { color, width: lw } },
       )
       annots.push({
-        x: gi / 2, y,
+        x: cx, y,
         xref: 'x', yref: 'y',
         text: label, showarrow: false,
         font: { size: isSig ? 13 : 10, color, family: '"Red Hat Display", sans-serif' },
@@ -1697,7 +1784,7 @@ function DistributionTab({
     const nDrawn = processedGroups.length - 1
     const yMax = nDrawn > 0 ? baseY + step * processedGroups.length + range * 0.02 : null
     return { shapes, annotations: annots, yMax }
-  }, [showSigBars, processedGroups, pairStats, isXOriented])
+  }, [showSigBars, processedGroups, pairStats, isXOriented, groupBy])
 
   return (
     <div className="space-y-4">
@@ -1913,9 +2000,11 @@ function DistributionTab({
                 title: isXOriented ? { text: unit || '', font: { size: 11 } } : undefined,
                 // For box/violin: numeric x with custom tick labels, hide axis lines
                 ...(!isXOriented && processedGroups.length > 0 ? {
-                  tickvals: processedGroups.map((_, idx) => idx),
-                  ticktext: processedGroups.map((g) => getGroupLabel(groupBy, g.group)),
-                  range: [-0.6, processedGroups.length - 0.4],
+                  tickvals: processedGroups.map((_, idx) => groupBy === 'age_sex' ? getAgeSexXPos(idx) : idx),
+                  ticktext: processedGroups.map((_, idx) =>
+                    groupBy === 'age_sex' ? (idx % 2 === 0 ? '♂' : '♀') : getGroupLabel(groupBy, processedGroups[idx].group)
+                  ),
+                  range: groupBy === 'age_sex' ? [-0.5, 8.4] : [-0.6, processedGroups.length - 0.4],
                   zeroline: false,
                 } : {}),
               },
@@ -1938,7 +2027,7 @@ function DistributionTab({
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               shapes: sigBarElements.shapes as any,
               legend: { orientation: 'h' as const, y: -0.3, x: 0.5, xanchor: 'center' as const, font: { size: 11 } },
-              margin: { l: 60, r: 20, t: showSigBars ? 40 : 20, b: 120 },
+              margin: { l: 60, r: 20, t: showSigBars ? 40 : 20, b: groupBy === 'age_sex' ? 150 : 120 },
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               annotations: [...annotations, ...(sigBarElements.annotations as any[])],
             }}
