@@ -1674,27 +1674,27 @@ function DistributionTab({
     const baseY = allMax + range * 0.04
     const shapes: object[] = []
     const annots: object[] = []
-    let nDrawn = 0
     for (let gi = 1; gi < processedGroups.length; gi++) {
       const s = pairStats.get(`${gi}-0`)
       if (!s) continue
-      const stars = s.pAdj < 0.001 ? '***' : s.pAdj < 0.01 ? '**' : s.pAdj < 0.05 ? '*' : null
-      if (!stars) continue
-      nDrawn++
+      const label = s.pAdj < 0.001 ? '***' : s.pAdj < 0.01 ? '**' : s.pAdj < 0.05 ? '*' : 'ns'
+      const isSig = label !== 'ns'
       const y = baseY + step * (gi - 1)
+      const color = isSig ? '#374151' : '#9CA3AF'
       shapes.push(
-        { type: 'line', x0: 0, y0: y, x1: gi, y1: y, xref: 'x', yref: 'y', line: { color: '#374151', width: 1.5 } },
-        { type: 'line', x0: 0, y0: y - step * 0.25, x1: 0, y1: y, xref: 'x', yref: 'y', line: { color: '#374151', width: 1.5 } },
-        { type: 'line', x0: gi, y0: y - step * 0.25, x1: gi, y1: y, xref: 'x', yref: 'y', line: { color: '#374151', width: 1.5 } },
+        { type: 'line', x0: 0, y0: y, x1: gi, y1: y, xref: 'x', yref: 'y', line: { color, width: isSig ? 1.5 : 1, dash: isSig ? 'solid' : 'dot' } },
+        { type: 'line', x0: 0, y0: y - step * 0.3, x1: 0, y1: y, xref: 'x', yref: 'y', line: { color, width: isSig ? 1.5 : 1 } },
+        { type: 'line', x0: gi, y0: y - step * 0.3, x1: gi, y1: y, xref: 'x', yref: 'y', line: { color, width: isSig ? 1.5 : 1 } },
       )
       annots.push({
-        x: gi / 2, y: y + step * 0.1,
+        x: gi / 2, y,
         xref: 'x', yref: 'y',
-        text: stars, showarrow: false,
-        font: { size: 13, color: '#374151', family: '"Red Hat Display", sans-serif' },
+        text: label, showarrow: false,
+        font: { size: isSig ? 13 : 10, color, family: '"Red Hat Display", sans-serif' },
         yanchor: 'bottom',
       })
     }
+    const nDrawn = processedGroups.length - 1
     const yMax = nDrawn > 0 ? baseY + step * processedGroups.length + range * 0.02 : null
     return { shapes, annotations: annots, yMax }
   }, [showSigBars, processedGroups, pairStats, isXOriented])
