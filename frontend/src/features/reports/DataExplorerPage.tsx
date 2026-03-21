@@ -1384,8 +1384,15 @@ function DistributionTab({
   const [showGridlines, setShowGridlines] = useState(false)
   const [showExport, setShowExport] = useState(false)
   const [showSigBars, setShowSigBars] = useState(false)
+  const [boldStars, setBoldStars] = useState(false)
+  const [showEffectSize, setShowEffectSize] = useState(false)
+  const [starColor, setStarColor] = useState('#374151')
+  const [hiddenPairs, setHiddenPairs] = useState<Set<number>>(new Set())
   const [strataBy, setStrataBy] = useState('')
   const plotContainerRef = useRef<HTMLDivElement>(null)
+
+  // Reset hidden pairs when the grouping or parameter changes
+  useEffect(() => { setHiddenPairs(new Set()) }, [groupBy, parameter])
 
   const { data: strataOptions } = useDataExplorerStrata()
 
@@ -1738,8 +1745,10 @@ function DistributionTab({
   const unit = selectedMeta?.unit ?? ''
   const isXOriented = chartType === 'histogram' || chartType === 'density'
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type SigAnnot = { _gi: number; [k: string]: any }
   const sigBarElements = useMemo(() => {
-    const empty = { shapes: [] as object[], annotations: [] as object[], yMax: null as number | null }
+    const empty = { shapes: [] as object[], annotations: [] as SigAnnot[], yMax: null as number | null }
     if (!showSigBars || processedGroups.length < 2 || isXOriented) return empty
     const allVals = processedGroups.flatMap((g) => g.values)
     if (!allVals.length) return empty
@@ -1749,41 +1758,40 @@ function DistributionTab({
     const step = range * 0.09
     const baseY = allMax + range * 0.04
     const shapes: object[] = []
-    const annots: object[] = []
+    const annots: SigAnnot[] = []
     for (let gi = 1; gi < processedGroups.length; gi++) {
+      if (hiddenPairs.has(gi)) continue
       const s = pairStats.get(`${gi}-0`)
       if (!s) continue
-      const label = s.pAdj < 0.001 ? '***' : s.pAdj < 0.01 ? '**' : s.pAdj < 0.05 ? '*' : 'ns'
-      const isSig = label !== 'ns'
+      const stars = s.pAdj < 0.001 ? '***' : s.pAdj < 0.01 ? '**' : s.pAdj < 0.05 ? '*' : 'ns'
+      const isSig = stars !== 'ns'
       const y = baseY + step * (gi - 1)
-      const color = isSig ? '#374151' : '#9CA3AF'
+      const barColor = isSig ? starColor : '#9CA3AF'
       const lw = isSig ? 1.5 : 1
-      const x0 = 0  // reference group is always index 0, xPos = getAgeSexXPos(0) = 0
+      const x0 = 0
       const x1 = groupBy === 'age_sex' ? getAgeSexXPos(gi) : gi
       const cx = (x0 + x1) / 2
-      const gapHalf = 0.05
       shapes.push(
-        // Left half of horizontal bracket
-        { type: 'line', x0, y0: y, x1: cx - gapHalf, y1: y, xref: 'x', yref: 'y', line: { color, width: lw } },
-        // Right half of horizontal bracket
-        { type: 'line', x0: cx + gapHalf, y0: y, x1, y1: y, xref: 'x', yref: 'y', line: { color, width: lw } },
-        // Left vertical tick
-        { type: 'line', x0, y0: y - step * 0.3, x1: x0, y1: y, xref: 'x', yref: 'y', line: { color, width: lw } },
-        // Right vertical tick
-        { type: 'line', x0: x1, y0: y - step * 0.3, x1, y1: y, xref: 'x', yref: 'y', line: { color, width: lw } },
+        { type: 'line', x0, y0: y, x1, y1: y, xref: 'x', yref: 'y', line: { color: barColor, width: lw, dash: isSig ? 'solid' : 'dot' } },
+        { type: 'line', x0, y0: y - step * 0.3, x1: x0, y1: y, xref: 'x', yref: 'y', line: { color: barColor, width: lw } },
+        { type: 'line', x0: x1, y0: y - step * 0.3, x1, y1: y, xref: 'x', yref: 'y', line: { color: barColor, width: lw } },
       )
+      const starsText = (boldStars && isSig) ? `<b>${stars}</b>` : stars
+      const epsText = showEffectSize ? `<br><span style="font-size:9px">ε²=${s.eps.toFixed(2)}</span>` : ''
       annots.push({
-        x: cx, y,
+        x: cx, y: y + step * 0.05,
         xref: 'x', yref: 'y',
-        text: label, showarrow: false,
-        font: { size: isSig ? 13 : 10, color, family: '"Red Hat Display", sans-serif' },
-        yanchor: 'middle',
+        text: starsText + epsText, showarrow: false,
+        font: { size: isSig ? 12 : 10, color: isSig ? starColor : '#9CA3AF', family: '"Red Hat Display", sans-serif' },
+        yanchor: 'bottom',
+        captureevents: true,
+        _gi: gi,
       })
     }
     const nDrawn = processedGroups.length - 1
     const yMax = nDrawn > 0 ? baseY + step * processedGroups.length + range * 0.02 : null
     return { shapes, annotations: annots, yMax }
-  }, [showSigBars, processedGroups, pairStats, isXOriented, groupBy])
+  }, [showSigBars, boldStars, showEffectSize, starColor, hiddenPairs, processedGroups, pairStats, isXOriented, groupBy])
 
   return (
     <div className="space-y-4">
@@ -1935,15 +1943,35 @@ function DistributionTab({
         </label>
 
         {!isXOriented && processedGroups.length >= 2 && (
-          <label className="inline-flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={showSigBars}
-              onChange={(e) => setShowSigBars(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-gray-300 accent-primary"
-            />
-            p-value bars
-          </label>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <label className="inline-flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
+              <input type="checkbox" checked={showSigBars} onChange={(e) => setShowSigBars(e.target.checked)} className="h-3.5 w-3.5 rounded border-gray-300 accent-primary" />
+              p-value bars
+            </label>
+            {showSigBars && (<>
+              <label className="inline-flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
+                <input type="checkbox" checked={boldStars} onChange={(e) => setBoldStars(e.target.checked)} className="h-3.5 w-3.5 rounded border-gray-300 accent-primary" />
+                bold
+              </label>
+              <label className="inline-flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
+                <input type="checkbox" checked={showEffectSize} onChange={(e) => setShowEffectSize(e.target.checked)} className="h-3.5 w-3.5 rounded border-gray-300 accent-primary" />
+                ε² size
+              </label>
+              <div className="flex items-center gap-1">
+                {(['#374151','#DC2626','#2563EB','#7C3AED','#059669'] as const).map((c) => (
+                  <button key={c} title={c} onClick={() => setStarColor(c)}
+                    className="h-3.5 w-3.5 rounded-full border transition-all"
+                    style={{ backgroundColor: c, borderColor: starColor === c ? '#000' : 'transparent', outline: starColor === c ? '1.5px solid #000' : 'none' }}
+                  />
+                ))}
+              </div>
+              {hiddenPairs.size > 0 && (
+                <button onClick={() => setHiddenPairs(new Set())} className="text-xs text-primary hover:underline">
+                  show all
+                </button>
+              )}
+            </>)}
+          </div>
         )}
 
         <label className="inline-flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
@@ -1986,7 +2014,10 @@ function DistributionTab({
           emptyMessage={parameter ? 'No data for the current filter selection' : 'Select a parameter above'}
           height="h-96"
         >
-          <Plot
+          {(() => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const PlotAny = Plot as any
+            return <PlotAny
             data={plotData}
             layout={{
               ...PLOTLY_LAYOUT_DEFAULTS,
@@ -2028,12 +2059,27 @@ function DistributionTab({
               legend: { orientation: 'h' as const, y: -0.3, x: 0.5, xanchor: 'center' as const, font: { size: 11 } },
               margin: { l: 60, r: 20, t: showSigBars ? 40 : 20, b: groupBy === 'age_sex' ? 150 : 120 },
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              annotations: [...annotations, ...(sigBarElements.annotations as any[])],
+              annotations: [...annotations, ...sigBarElements.annotations.map(({ _gi: _drop, ...a }) => a)] as any,
+            }}
+            // Click on a sig bar annotation to toggle it hidden
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            onClickAnnotation={(data: any) => {
+              const offset = annotations.length
+              const localIdx = data.index - offset
+              if (localIdx >= 0 && localIdx < sigBarElements.annotations.length) {
+                const gi = sigBarElements.annotations[localIdx]._gi
+                setHiddenPairs((prev) => {
+                  const next = new Set(prev)
+                  next.has(gi) ? next.delete(gi) : next.add(gi)
+                  return next
+                })
+              }
             }}
             config={{ displayModeBar: false, responsive: true }}
             style={{ width: '100%', height: '100%' }}
             useResizeHandler
-          />
+            />
+          })()}
         </ChartCard>
       </div>
 
